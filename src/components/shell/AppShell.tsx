@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="min-w-0 flex flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 flex items-center gap-3 px-4 lg:px-6 h-14 border-b border-line bg-bg/90 backdrop-blur">
+        <header className="sticky top-0 z-20 flex items-center gap-3 px-4 lg:px-6 min-h-14 pt-[env(safe-area-inset-top)] border-b border-line bg-bg/90 backdrop-blur">
           <div className="lg:hidden">{Brand}</div>
           <div className="hidden lg:flex items-center gap-2 text-[13px] text-muted">
             {portfolio && (<>
@@ -121,6 +121,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="absolute right-0 top-0 h-full w-72 bg-surface border-l border-line p-4 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">{Brand}<button type="button" className="btn" onClick={() => setMenu(false)} aria-label="Close menu"><X size={16} /></button></div>
               <NavList onNav={() => setMenu(false)} />
+              <button type="button" className="btn justify-center text-[14px]" onClick={() => { void refresh(); setMenu(false); }} disabled={loading}>
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                {loading ? "Refreshing…" : lastUpdated ? `Refresh · updated ${lastUpdated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Refresh"}
+              </button>
             </div>
           </div>
         )}
