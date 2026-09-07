@@ -13,7 +13,7 @@ export default function TradesPage() {
     <Ready>
       {(portfolio, players) => (
         <>
-          <PageHeader title="Trades" sub="Trade analyzer and trade finder land in Phase 3. No player values are shown until a value provider is configured — nothing here is fabricated." />
+          <PageHeader title="Trades" sub="Placeholder for the Phase 3 trade analyzer. For now it shows one input a trade tool needs: how deep you are at each position in each league. Thin spots (highlighted) are where a trade would help most. No player values are shown until a value source is wired in." />
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
             {portfolio.leagues.map((b) => (
               <Card key={b.league.league_id} title={b.league.name} actions={<span className="caption">{b.format.isDynasty ? "Dynasty" : "Redraft"} · {b.format.superflex ? "SF" : "1QB"} · {b.format.scoring}{b.format.tePremium ? " · TEP" : ""}</span>}>

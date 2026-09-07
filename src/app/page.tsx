@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Ready, AlertGroupByLeague, AlertRow, LeagueCard } from "@/components/fantasy";
-import { Card, EmptyState, PageHeader, StatTile } from "@/components/ui";
+import { Card, EmptyState, PageHeader, StatTile, fmtPts, PlayerLink } from "@/components/ui";
 import { leagueAlerts, sortAlerts, waiverAlerts } from "@/lib/analysis/alerts";
 import { combinedRecord, recordStr, totalOwned, weekRecord } from "@/lib/analysis/summary";
 import { allExposure } from "@/lib/analysis/exposure";
+import { allMoves } from "@/lib/analysis/optimizer";
 
 export default function CommandCenter() {
-  const { trending } = usePortfolio();
+  const { trending, projections } = usePortfolio();
   return (
     <Ready>
       {(portfolio, players) => {
@@ -22,6 +23,10 @@ export default function CommandCenter() {
         const wk = weekRecord(portfolio);
         const dynasty = portfolio.leagues.filter((b) => b.format.isDynasty).length;
         const exposure = allExposure(portfolio, players);
+        const proj = projections?.projections ?? {};
+        const moves = Object.keys(proj).length ? allMoves(portfolio, players, proj, trending?.adds ?? []) : [];
+        const swaps = moves.flatMap((m) => (m.lineup?.swaps ?? []).map((s) => ({ ...s, league: m.b })));
+        const pointsLeft = moves.reduce((n, m) => n + (m.lineup?.gain ?? 0), 0);
         const leaguesNeedingAction = new Set([...urgent, ...warnings].map((a) => a.leagueId));
         const quiet = portfolio.leagues.filter((b) => !leaguesNeedingAction.has(b.league.league_id));
 
@@ -35,7 +40,7 @@ export default function CommandCenter() {
               <StatTile label={`Week ${portfolio.week}`} value={wk.pending === portfolio.leagues.length ? "—" : `${wk.winning}-${wk.losing}${wk.tied ? `-${wk.tied}` : ""}`} sub={wk.pending ? `${wk.pending} not started` : "Live from Sleeper"} tone={wk.winning > wk.losing ? "ok" : wk.losing > wk.winning ? "urgent" : undefined} />
               <StatTile label="Players owned" value={totalOwned(portfolio)} sub={`${exposure.length} unique`} />
               <StatTile label="Needs action" value={leaguesNeedingAction.size} sub={`${urgent.length} urgent · ${warnings.length} warnings`} tone={urgent.length ? "urgent" : leaguesNeedingAction.size ? undefined : "ok"} />
-              <StatTile label="Waiver signals" value={waivers.length} sub="Trending adds you can grab" tone="muted" />
+              <StatTile label="Points on the table" value={moves.length ? `+${fmtPts(pointsLeft)}` : "—"} sub={swaps.length ? `${swaps.length} start/sit swap${swaps.length === 1 ? "" : "s"}` : moves.length ? "Lineups are optimal" : "Loading projections"} tone={pointsLeft >= 5 ? "urgent" : pointsLeft > 0 ? "gold" : "ok"} />
             </div>
 
             <section className="mb-8">
@@ -53,6 +58,19 @@ export default function CommandCenter() {
               )}
             </section>
 
+            {swaps.length > 0 && (
+              <Card className="mb-4" title="Suggested lineup moves" actions={<Link href="/moves" className="text-[13px] text-gold hover:underline">All moves</Link>} pad={false}>
+                <div className="divide-y divide-line">
+                  {swaps.sort((a, b) => b.gain - a.gain).slice(0, 8).map((s) => (
+                    <div key={s.league.league.league_id + s.in} className="flex items-center gap-3 px-4 py-2.5 text-[13.5px]">
+                      <span className="num text-ok font-semibold w-12">+{fmtPts(s.gain)}</span>
+                      <span className="flex-1 min-w-0 truncate">Start <PlayerLink player={players[s.in]} className="font-medium" /> over {s.out ? <PlayerLink player={players[s.out]} /> : "an empty slot"}</span>
+                      <Link href={`/leagues/${s.league.league.league_id}`} className="text-muted hover:text-gold text-[12px] truncate max-w-[9rem]">{s.league.league.name}</Link>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
             <div className="grid lg:grid-cols-2 gap-4 mb-8">
               <Card title="Watch list" actions={<span className="caption">{info.length} questionable / housekeeping</span>} pad={false}>
                 {info.length === 0 ? <div className="p-4 caption">Nothing to watch.</div> : (

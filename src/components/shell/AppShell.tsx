@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
+  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, Wand2, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
 } from "lucide-react";
 import { usePortfolio } from "./PortfolioProvider";
 import { leagueAlerts, sortAlerts } from "@/lib/analysis/alerts";
@@ -14,10 +14,11 @@ const NAV = [
   { href: "/", label: "Command Center", icon: LayoutDashboard, mobile: true },
   { href: "/leagues", label: "Leagues", icon: Trophy, mobile: true },
   { href: "/lineups", label: "Lineups", icon: ListChecks, mobile: true },
+  { href: "/moves", label: "Moves", icon: Wand2, mobile: true },
   { href: "/waivers", label: "Waivers", icon: Radar, mobile: true },
   { href: "/portfolio", label: "Portfolio", icon: PieChart },
   { href: "/players", label: "Players", icon: Users },
-  { href: "/matchups", label: "Matchups", icon: Swords, mobile: true },
+  { href: "/matchups", label: "Matchups", icon: Swords },
   { href: "/rooting", label: "Rooting", icon: Megaphone },
   { href: "/trades", label: "Trades", icon: ArrowLeftRight },
   { href: "/dynasty", label: "Dynasty", icon: Crown, dynastyOnly: true },
