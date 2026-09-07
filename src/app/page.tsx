@@ -8,9 +8,10 @@ import { leagueAlerts, sortAlerts, waiverAlerts } from "@/lib/analysis/alerts";
 import { combinedRecord, recordStr, totalOwned, weekRecord } from "@/lib/analysis/summary";
 import { allExposure } from "@/lib/analysis/exposure";
 import { allMoves } from "@/lib/analysis/optimizer";
+import { nextWeekByes } from "@/lib/analysis/byes";
 
 export default function CommandCenter() {
-  const { trending, projections } = usePortfolio();
+  const { trending, projections, schedule } = usePortfolio();
   return (
     <Ready>
       {(portfolio, players) => {
@@ -24,7 +25,8 @@ export default function CommandCenter() {
         const dynasty = portfolio.leagues.filter((b) => b.format.isDynasty).length;
         const exposure = allExposure(portfolio, players);
         const proj = projections?.projections ?? {};
-        const moves = Object.keys(proj).length ? allMoves(portfolio, players, proj, trending?.adds ?? []) : [];
+        const moves = Object.keys(proj).length ? allMoves(portfolio, players, proj, trending?.adds ?? [], schedule) : [];
+        const byes = nextWeekByes(portfolio, players, schedule);
         const swaps = moves.flatMap((m) => (m.lineup?.swaps ?? []).map((s) => ({ ...s, league: m.b })));
         const pointsLeft = moves.reduce((n, m) => n + (m.lineup?.gain ?? 0), 0);
         const leaguesNeedingAction = new Set([...urgent, ...warnings].map((a) => a.leagueId));
@@ -69,6 +71,23 @@ export default function CommandCenter() {
                     </div>
                   ))}
                 </div>
+              </Card>
+            )}
+            {byes.length > 0 && (
+              <Card className="mb-4" title={`Week ${portfolio.week + 1} byes`} actions={<span className="caption">{byes.reduce((n, b) => n + b.starters.length, 0)} current starters sit out next week</span>} pad={false}>
+                <div className="divide-y divide-line">
+                  {byes.map((b) => (
+                    <div key={b.leagueId} className="flex items-start gap-3 px-4 py-2.5 text-[13.5px]">
+                      <Link href={`/leagues/${b.leagueId}`} className="w-40 shrink-0 truncate hover:text-gold">{b.leagueName}</Link>
+                      <div className="flex-1 min-w-0 flex flex-wrap gap-x-2 gap-y-0.5">
+                        {b.starters.map((id) => <PlayerLink key={id} player={players[id]} className="font-medium text-warn" />)}
+                        {b.bench.map((id) => <PlayerLink key={id} player={players[id]} className="text-muted" />)}
+                      </div>
+                      <span className="caption shrink-0">{b.starters.length} starter{b.starters.length === 1 ? "" : "s"}{b.bench.length ? ` · ${b.bench.length} bench` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-4 py-2 caption border-t border-line">Fix these on waivers this week rather than Sunday morning. Highlighted names are current starters.</div>
               </Card>
             )}
             <div className="grid lg:grid-cols-2 gap-4 mb-8">

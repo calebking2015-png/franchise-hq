@@ -126,8 +126,8 @@ export function providerStatus() {
     injury: { configured: providers.injury.configured, name: providers.injury.name },
     news: { configured: providers.news.configured, name: providers.news.name },
     dynastyValue: { configured: providers.dynastyValue.configured, name: providers.dynastyValue.name },
-    betting: { configured: providers.betting.configured, name: providers.betting.name },
-    schedule: { configured: providers.schedule.configured, name: providers.schedule.name },
+    betting: { configured: !!process.env.ODDS_API_KEY, name: process.env.ODDS_API_KEY ? "The Odds API" : "none" },
+    schedule: { configured: true, name: "Sleeper schedule (dates + live status; no clock times)" },
   };
 }
 export type ProviderStatus = ReturnType<typeof providerStatus>;

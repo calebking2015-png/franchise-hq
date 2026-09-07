@@ -1,18 +1,45 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import type { Portfolio, LeagueBundle } from "@/lib/portfolio/types";
 import type { PlayerMap, ProjectionMap } from "@/lib/sleeper/types";
 import { projectMatchup, projectPlayer } from "@/lib/projections";
+import { kickLabel, opponentFor } from "@/lib/schedule";
 import type { Alert } from "@/lib/analysis/alerts";
 import { formatSummary, slotLabel } from "@/lib/league/format";
 import { myTeam, opponentTeam, recordStr, rosterGroups } from "@/lib/analysis/summary";
 import { Card, cx, EmptyState, fmtPts, LeagueKindChip, PlayerCell, PlayerLink, PositionBadge, Skeleton, StatusBadge, TeamLogo, Unavailable } from "@/components/ui";
 
 /** Renders children once portfolio + players are loaded; otherwise skeletons / errors. */
+/** First-visit screen: no saved username yet. */
+export function Onboarding() {
+  const { setUsername, recentUsernames } = usePortfolio();
+  const [draft, setDraft] = useState("");
+  return (
+    <div className="max-w-md mx-auto mt-10 card p-6 grid gap-4">
+      <div>
+        <div className="display text-[26px]">Welcome to Franchise HQ</div>
+        <p className="caption mt-1">One dashboard for every Sleeper league you&apos;re in: lineup alerts, start/sit, waivers, projected matchups and who to root for on Sunday. Read-only — it never touches your teams.</p>
+      </div>
+      <label className="grid gap-1.5">
+        <span className="caption">Your Sleeper username</span>
+        <input className="field" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="exactly as it appears in Sleeper" autoFocus onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) setUsername(draft); }} />
+      </label>
+      <button type="button" className="btn btn-gold justify-center" disabled={!draft.trim()} onClick={() => setUsername(draft)}>Load my leagues</button>
+      {recentUsernames.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 items-center"><span className="caption">Recent:</span>{recentUsernames.map((u) => <button key={u} type="button" className="chip chip-outline hover:border-gold" onClick={() => setUsername(u)}>{u}</button>)}</div>
+      )}
+      <p className="caption">Saved only in this browser. Change it any time in Settings.</p>
+    </div>
+  );
+}
+
 export function Ready({ children }: { children: (p: Portfolio, players: PlayerMap) => React.ReactNode }) {
   const { portfolio, players, playersLoaded, loading, error, username } = usePortfolio();
+  if (username === null) return <div className="grid gap-3"><Skeleton h={28} w={240} /><Skeleton h={180} /></div>;
+  if (username === "") return <Onboarding />;
   if (!portfolio && loading) {
     return (
       <div className="grid gap-3">
@@ -130,7 +157,7 @@ export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: nu
 /* ---------- Lineup table ---------- */
 
 export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; players: PlayerMap; compact?: boolean }) {
-  const { projections } = usePortfolio();
+  const { projections, schedule, odds } = usePortfolio();
   const proj: ProjectionMap = projections?.projections ?? {};
   const g = rosterGroups(b);
   const m = b.matchup;
@@ -138,26 +165,29 @@ export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; 
   const total = g.starters.reduce((n, s) => n + (s.playerId ? projectPlayer(s.playerId, b, players, proj) ?? 0 : 0), 0);
   return (
     <table className="data">
-      <thead><tr><th style={{ width: 56 }}>Slot</th><th>Player</th>{!compact && <th className="hidden md:table-cell">Opp</th>}{!compact && <th className="hidden md:table-cell">Kick</th>}<th className="r">Proj</th><th className="r">Pts</th></tr></thead>
+      <thead><tr><th style={{ width: 56 }}>Slot</th><th>Player</th>{!compact && <th className="hidden md:table-cell">Opp</th>}{!compact && <th className="hidden md:table-cell">Game</th>}{!compact && odds?.configured && <th className="hidden lg:table-cell r" title="Implied team total / game over-under">Vegas</th>}<th className="r">Proj</th><th className="r">Pts</th></tr></thead>
       <tbody>
         {g.starters.map((s, i) => {
           const p = s.playerId ? players[s.playerId] : undefined;
           const pts = points(s.playerId, i);
           const pr = s.playerId ? projectPlayer(s.playerId, b, players, proj) : null;
-          const opp = s.playerId ? proj[s.playerId]?.opp : null;
+          const opp = (s.playerId ? proj[s.playerId]?.opp : null) ?? opponentFor(schedule, p?.team, b.week);
+          const kick = kickLabel(schedule, p?.team, b.week);
+          const line = p?.team ? odds?.odds[p.team] : undefined;
           return (
             <tr key={`${s.slot}-${i}`} className={!s.playerId ? "bg-urgent/5" : ""}>
               <td><span className="chip chip-outline num">{slotLabel(s.slot)}</span></td>
               <td>{s.playerId ? <PlayerCell player={p} id={s.playerId} showHeadshot={!compact} /> : <span className="text-urgent font-medium">Empty slot</span>}</td>
-              {!compact && <td className="hidden md:table-cell text-muted">{opp ? (opp.startsWith("@") ? opp : `vs ${opp}`) : p?.team ? <span className="text-faint">BYE</span> : <Unavailable what="—" />}</td>}
-              {!compact && <td className="hidden md:table-cell text-muted"><Unavailable what="—" /></td>}
+              {!compact && <td className="hidden md:table-cell text-muted">{opp ? (opp.startsWith("@") || opp.startsWith("vs") ? opp : `vs ${opp}`) : kick.tone === "bye" ? <span className="text-faint">BYE</span> : <Unavailable what="—" />}</td>}
+              {!compact && <td className={cx("hidden md:table-cell", kick.tone === "live" ? "text-ok font-medium" : kick.tone === "final" ? "text-faint" : kick.tone === "bye" ? "text-warn" : "text-muted")}>{kick.text}</td>}
+              {!compact && odds?.configured && <td className="hidden lg:table-cell r num text-muted">{line?.implied != null ? <>{line.implied}<span className="text-faint"> / {line.total}</span></> : "—"}</td>}
               <td className="r num">{pr != null ? fmtPts(pr) : <span className="text-faint">—</span>}</td>
               <td className="r num font-medium">{pts != null && pts !== 0 ? fmtPts(pts) : <span className="text-faint">—</span>}</td>
             </tr>
           );
         })}
       </tbody>
-      <tfoot><tr><td colSpan={compact ? 2 : 4} className="caption">Projected total</td><td className="r num font-semibold">{fmtPts(total)}</td><td className="r num font-semibold">{m && m.myPoints ? fmtPts(m.myPoints) : <span className="text-faint">—</span>}</td></tr></tfoot>
+      <tfoot><tr><td colSpan={compact ? 2 : odds?.configured ? 5 : 4} className="caption">Projected total</td><td className="r num font-semibold">{fmtPts(total)}</td><td className="r num font-semibold">{m && m.myPoints ? fmtPts(m.myPoints) : <span className="text-faint">—</span>}</td></tr></tfoot>
     </table>
   );
 }

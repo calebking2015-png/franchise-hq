@@ -12,14 +12,21 @@ import type { PlayerMap } from "@/lib/sleeper/types";
 
 type View = "all" | "actionable";
 
+function Vegas({ team }: { team: string | null | undefined }) {
+  const { odds } = usePortfolio();
+  const l = team ? odds?.odds[team] : undefined;
+  if (!odds?.configured || !l || l.implied == null) return null;
+  return <span className="caption num" title="Implied team total · game total">imp {l.implied} · o/u {l.total}</span>;
+}
+
 function SwapRow({ s, players }: { s: OptimalLineup["swaps"][number]; players: PlayerMap }) {
   const inP = players[s.in]; const outP = s.out ? players[s.out] : undefined;
   return (
     <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-2 px-4 py-2.5">
       <span className="chip chip-outline num">{slotLabel(s.slot)}</span>
-      <div className="min-w-0"><div className="caption">Start</div><PlayerCell player={inP} id={s.in} showHeadshot={false} /></div>
+      <div className="min-w-0"><div className="caption">Start</div><PlayerCell player={inP} id={s.in} showHeadshot={false} /><Vegas team={inP?.team} /></div>
       <span className="text-muted">→</span>
-      <div className="min-w-0"><div className="caption">Sit</div>{outP ? <PlayerCell player={outP} id={s.out!} showHeadshot={false} /> : <span className="text-urgent">Empty slot</span>}</div>
+      <div className="min-w-0"><div className="caption">Sit</div>{outP ? <><PlayerCell player={outP} id={s.out!} showHeadshot={false} /><Vegas team={outP.team} /></> : <span className="text-urgent">Empty slot</span>}</div>
       <div className="text-right"><div className="num text-ok font-semibold text-[16px]">+{fmtPts(s.gain)}</div><div className="caption max-w-[14ch] truncate" title={s.reason}>{s.reason}</div></div>
     </div>
   );
@@ -38,21 +45,22 @@ function PickupRow({ w, players, b }: { w: Pickup; players: PlayerMap; b: League
 }
 
 export default function MovesPage() {
-  const { projections, trending } = usePortfolio();
+  const { projections, trending, schedule, odds } = usePortfolio();
   const [view, setView] = useState<View>("actionable");
   return (
     <Ready>
       {(portfolio, players) => {
         const proj = projections?.projections ?? {};
         if (Object.keys(proj).length === 0) return <><PageHeader title="Moves" /><EmptyState title="Projections not loaded yet" detail="Start/sit and waiver suggestions need this week's projections. Hit refresh in a moment." /></>;
-        const moves = allMoves(portfolio, players, proj, trending?.adds ?? []);
+        const moves = allMoves(portfolio, players, proj, trending?.adds ?? [], schedule);
+        const anyLocked = moves.some((m) => m.locked.size > 0);
         const totalGain = moves.reduce((n, m) => n + (m.lineup?.gain ?? 0), 0);
         const swaps = moves.reduce((n, m) => n + (m.lineup?.swaps.length ?? 0), 0);
         const pickups = moves.reduce((n, m) => n + m.pickups.length, 0);
         const list = view === "actionable" ? moves.filter((m) => (m.lineup?.swaps.length ?? 0) > 0 || m.pickups.length > 0) : moves;
         return (
           <>
-            <PageHeader title="Moves" sub={<>Week {portfolio.week} · start/sit and waiver moves that raise your projected total, using Sleeper&apos;s projections under each league&apos;s scoring. Suggestions, not orders — check injury news and matchups before you pull the trigger.</>}
+            <PageHeader title="Moves" sub={<>Week {portfolio.week} · start/sit and waiver moves that raise your projected total, using Sleeper&apos;s projections under each league&apos;s scoring. Suggestions, not orders — check injury news and matchups before you pull the trigger.{anyLocked && <> <span className="text-gold">Games are underway:</span> players whose game has kicked off are locked in place and never suggested.</>}</>}
               actions={<Segmented value={view} onChange={setView} options={[{ value: "actionable", label: "Has moves", count: list.length }, { value: "all", label: "All leagues", count: moves.length }]} />} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <StatTile label="Points on the table" value={`+${fmtPts(totalGain)}`} sub="Across all lineups this week" tone={totalGain >= 5 ? "urgent" : totalGain > 0 ? "gold" : "ok"} />
@@ -82,7 +90,7 @@ export default function MovesPage() {
                 </Card>
               ))}
             </div>
-            <p className="caption mt-4">Gain = change in the league&apos;s best possible projected lineup. Drop suggestions are the bench player who adds least to that lineup this week; for dynasty leagues that is not the same as least valuable.</p>
+            <p className="caption mt-4">Gain = change in the league&apos;s best possible projected lineup. Drop suggestions are the bench player who adds least to that lineup this week; for dynasty leagues that is not the same as least valuable.{odds?.configured ? " Vegas numbers are the team's implied total and the game over/under — a tiebreaker for close calls, not a projection." : " Add an ODDS_API_KEY (the-odds-api.com, free tier) to see Vegas implied totals next to close calls."}</p>
           </>
         );
       }}

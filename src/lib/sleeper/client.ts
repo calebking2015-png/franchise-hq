@@ -25,6 +25,7 @@ export const TTL = {
   trending: 60 * 15,
   players: 60 * 60 * 24,
   projections: 60 * 30,
+  schedule: 60 * 2,
 } as const;
 
 export class SleeperError extends Error {
@@ -65,6 +66,9 @@ export const sleeper = {
   trendingDrops: (hours = 24, limit = 50) =>
     get<SleeperTrendingPlayer[]>(`/players/nfl/trending/drop?lookback_hours=${hours}&limit=${limit}`, TTL.trending),
   playersRaw: () => get<Record<string, SleeperPlayerRaw>>("/players/nfl", TTL.players),
+  /** Season schedule with per-game live status (undocumented; lives outside /v1). */
+  scheduleRaw: (season: string) =>
+    get<import("@/lib/schedule").ScheduleRaw[] | null>(`/schedule/nfl/regular/${season}`, TTL.schedule, ROOT),
   /** Weekly stat projections for every fantasy position (Sleeper's in-app numbers, via Rotowire). */
   projectionsRaw: (season: string, week: number) =>
     get<SleeperProjectionRaw[] | null>(

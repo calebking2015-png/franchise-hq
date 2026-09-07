@@ -9,6 +9,43 @@ import { projectPlayer } from "@/lib/projections";
 
 export type Side = "for" | "against" | "neutral";
 
+/**
+ * Standings rivals: teams within one game of you (excluding this week's opponent, who is already
+ * counted). Their starters are people you quietly want to fail. Meaningful from ~week 4 on.
+ */
+export interface RivalInterest {
+  playerId: string;
+  stake: number; // projected points, summed across rival teams starting him (positive = bad for you)
+  rivals: { leagueId: string; leagueName: string; team: string; record: string; proj: number | null }[];
+}
+
+export const RIVALS_MIN_WEEK = 4;
+
+export function rivalInterests(p: Portfolio, players: PlayerMap, proj: ProjectionMap): RivalInterest[] {
+  const map = new Map<string, RivalInterest>();
+  for (const b of p.leagues) {
+    const me = b.teams.find((t) => t.rosterId === b.myRosterId);
+    if (!me) continue;
+    const myW = me.record.wins + me.record.ties / 2;
+    const oppId = b.matchup?.oppRosterId ?? null;
+    for (const t of b.teams) {
+      if (t.rosterId === me.rosterId || t.rosterId === oppId) continue;
+      const w = t.record.wins + t.record.ties / 2;
+      if (Math.abs(w - myW) > 1) continue;
+      const roster = b.rosters.find((r) => r.roster_id === t.rosterId);
+      for (const pid of roster?.starters ?? []) {
+        if (!pid || pid === "0" || !players[pid]) continue;
+        const pr = projectPlayer(pid, b, players, proj);
+        const r = map.get(pid) ?? { playerId: pid, stake: 0, rivals: [] };
+        r.rivals.push({ leagueId: b.league.league_id, leagueName: b.league.name, team: t.teamName, record: `${t.record.wins}-${t.record.losses}${t.record.ties ? `-${t.record.ties}` : ""}`, proj: pr });
+        r.stake += pr ?? 0;
+        map.set(pid, r);
+      }
+    }
+  }
+  return [...map.values()].map((r) => ({ ...r, stake: Math.round(r.stake * 10) / 10 })).sort((a, c) => c.stake - a.stake);
+}
+
 export interface RootingLeague {
   leagueId: string;
   leagueName: string;

@@ -3,22 +3,29 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Portfolio } from "@/lib/portfolio/types";
 import type { PlayerMap, ProjectionMap, SleeperTrendingPlayer } from "@/lib/sleeper/types";
+import type { ScheduleMap } from "@/lib/schedule";
+import type { OddsMap } from "@/lib/odds";
 
-const DEFAULT_USERNAME = process.env.NEXT_PUBLIC_DEFAULT_USERNAME ?? "Poppysavage";
 const LS_USER = "fhq.username";
+const LS_RECENT = "fhq.recent";
 const REFRESH_MS = 3 * 60 * 1000;
 
 export interface Trending { adds: SleeperTrendingPlayer[]; drops: SleeperTrendingPlayer[]; hours: number }
+export interface Odds { configured: boolean; odds: OddsMap; note?: string }
 export interface Projections { projections: ProjectionMap; season: string; week: number; source: string; fetchedAt: string }
 
 interface Ctx {
-  username: string;
+  /** null until we've checked the browser for a saved username; "" means none saved (show onboarding). */
+  username: string | null;
   setUsername: (u: string) => void;
+  recentUsernames: string[];
   portfolio: Portfolio | null;
   players: PlayerMap;
   playersLoaded: boolean;
   trending: Trending | null;
   projections: Projections | null;
+  schedule: ScheduleMap | null;
+  odds: Odds | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -35,7 +42,10 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export function PortfolioProvider({ children }: { children: React.ReactNode }) {
-  const [username, setUsernameState] = useState(DEFAULT_USERNAME);
+  const [username, setUsernameState] = useState<string | null>(null);
+  const [recentUsernames, setRecent] = useState<string[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleMap | null>(null);
+  const [odds, setOdds] = useState<Odds | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [players, setPlayers] = useState<PlayerMap>({});
   const [playersLoaded, setPlayersLoaded] = useState(false);
@@ -47,8 +57,10 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const mounted = useRef(false);
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? window.localStorage.getItem(LS_USER) : null;
-    if (saved) setUsernameState(saved);
+    const saved = window.localStorage.getItem(LS_USER) ?? "";
+    setUsernameState(saved);
+    try { setRecent(JSON.parse(window.localStorage.getItem(LS_RECENT) ?? "[]")); } catch { /* ignore */ }
+    if (!saved) setLoading(false);
     mounted.current = true;
   }, []);
 
@@ -56,6 +68,11 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
     const v = u.trim();
     if (!v) return;
     window.localStorage.setItem(LS_USER, v);
+    setRecent((prev) => {
+      const next = [v, ...prev.filter((x) => x.toLowerCase() !== v.toLowerCase())].slice(0, 6);
+      window.localStorage.setItem(LS_RECENT, JSON.stringify(next));
+      return next;
+    });
     setUsernameState(v);
   }, []);
 
@@ -70,6 +87,10 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
       getJson<Projections>(`/api/sleeper/projections?season=${encodeURIComponent(p.season)}&week=${p.week}`)
         .then(setProjections)
         .catch(() => setProjections((prev) => prev));
+      // Schedule carries live game status, so it refreshes on the same cadence as scores.
+      getJson<{ schedule: ScheduleMap }>(`/api/sleeper/schedule?season=${encodeURIComponent(p.season)}`)
+        .then((r) => setSchedule(r.schedule))
+        .catch(() => setSchedule((prev) => prev));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -83,9 +104,11 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
       .then((r) => { setPlayers(r.players); setPlayersLoaded(true); })
       .catch((e) => setError((prev) => prev ?? `Player database: ${(e as Error).message}`));
     getJson<Trending>("/api/sleeper/trending").then(setTrending).catch(() => setTrending({ adds: [], drops: [], hours: 24 }));
+    getJson<Odds>("/api/odds").then(setOdds).catch(() => setOdds({ configured: false, odds: {} }));
   }, []);
 
   useEffect(() => {
+    if (!username) return; // null = not checked yet, "" = onboarding
     void loadPortfolio(username);
     const t = setInterval(() => {
       if (document.visibilityState === "visible") void loadPortfolio(username);
@@ -94,6 +117,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   }, [username, loadPortfolio]);
 
   const refresh = useCallback(async () => {
+    if (!username) return;
     await loadPortfolio(username);
     getJson<Trending>("/api/sleeper/trending").then(setTrending).catch(() => undefined);
   }, [username, loadPortfolio]);
@@ -104,8 +128,8 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<Ctx>(
-    () => ({ username, setUsername, portfolio, players: merged, playersLoaded, trending, projections, loading, error, refresh, lastUpdated }),
-    [username, setUsername, portfolio, merged, playersLoaded, trending, projections, loading, error, refresh, lastUpdated],
+    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, schedule, odds, loading, error, refresh, lastUpdated }),
+    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, schedule, odds, loading, error, refresh, lastUpdated],
   );
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

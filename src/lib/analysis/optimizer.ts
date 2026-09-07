@@ -11,6 +11,7 @@ import type { PlayerMap, ProjectionMap } from "@/lib/sleeper/types";
 import { slotAccepts, startingSlots } from "@/lib/league/format";
 import { isHardOut } from "./alerts";
 import { projectPlayer } from "@/lib/projections";
+import { gameFor, hasStarted, type ScheduleMap } from "@/lib/schedule";
 
 export interface Assignment { slot: string; playerId: string | null; proj: number }
 
@@ -70,18 +71,29 @@ function solve(slots: string[], cands: { id: string; pos: string; proj: number }
   return bestPick.map((i) => (i >= 0 ? sorted[i].id : null));
 }
 
-export function optimalLineup(b: LeagueBundle, players: PlayerMap, proj: ProjectionMap): OptimalLineup | null {
+/**
+ * @param locked player ids whose NFL game has kicked off. Locked starters stay where they are;
+ *               locked bench players can't come in. Pass nothing to get the unconstrained optimum.
+ */
+export function optimalLineup(b: LeagueBundle, players: PlayerMap, proj: ProjectionMap, locked?: Set<string>): OptimalLineup | null {
   const r = b.myRoster;
   if (!r) return null;
   const slots = startingSlots(b.league);
+  const current = r.starters ?? [];
   const pool = eligiblePool(b, players);
-  const cands = pool.map((id) => ({ id, pos: players[id].pos, proj: projectPlayer(id, b, players, proj) ?? 0 }));
-  const pick = solve(slots, cands);
   const pj = (id: string | null | undefined) => (id && id !== "0" ? projectPlayer(id, b, players, proj) ?? 0 : 0);
+
+  // Fix locked starters in their current slots and solve only the open slots.
+  const fixed = new Map<number, string>();
+  if (locked?.size) current.forEach((id, i) => { if (id && id !== "0" && locked.has(id)) fixed.set(i, id); });
+  const openIdx = slots.map((_, i) => i).filter((i) => !fixed.has(i));
+  const cands = pool.filter((id) => !locked?.has(id)).map((id) => ({ id, pos: players[id].pos, proj: pj(id) }));
+  const solved = solve(openIdx.map((i) => slots[i]), cands);
+  const pick: (string | null)[] = slots.map((_, i) => fixed.get(i) ?? null);
+  openIdx.forEach((i, k) => { pick[i] = solved[k]; });
 
   const assigned = slots.map((slot, i) => ({ slot, playerId: pick[i], proj: pj(pick[i]) }));
   const total = assigned.reduce((n, a) => n + a.proj, 0);
-  const current = r.starters ?? [];
   const currentTotal = current.reduce((n, id) => n + pj(id), 0);
 
   // Swaps: anyone recommended who isn't currently starting, paired with the current starter he displaces.
@@ -132,10 +144,10 @@ export interface Pickup {
  * Free agents who would raise this week's optimal lineup. For each position the league starts,
  * take the top projected free agents, simulate add + drop of your least valuable bench body, re-optimize.
  */
-export function waiverPickups(b: LeagueBundle, players: PlayerMap, proj: ProjectionMap, trending: { player_id: string; count: number }[], perPos = 3): Pickup[] {
+export function waiverPickups(b: LeagueBundle, players: PlayerMap, proj: ProjectionMap, trending: { player_id: string; count: number }[], perPos = 3, locked?: Set<string>): Pickup[] {
   const r = b.myRoster;
   if (!r) return [];
-  const base = optimalLineup(b, players, proj);
+  const base = optimalLineup(b, players, proj, locked);
   if (!base) return [];
   const starting = new Set(base.slots.map((s) => s.playerId).filter(Boolean) as string[]);
   const slots = startingSlots(b.league);
@@ -159,7 +171,7 @@ export function waiverPickups(b: LeagueBundle, players: PlayerMap, proj: Project
       if (dropOrder.length === 0 && (r.players?.length ?? 0) > 0) break;
       const drop = dropOrder[0] ?? null;
       const simRoster = { ...r, players: [...(r.players ?? []).filter((id) => id !== drop), add] };
-      const sim = optimalLineup({ ...b, myRoster: simRoster }, players, proj);
+      const sim = optimalLineup({ ...b, myRoster: simRoster }, players, proj, locked);
       const gain = sim ? Math.round((sim.total - base.total) * 10) / 10 : 0;
       if (gain < 1) continue;
       out.push({ leagueId: b.league.league_id, leagueName: b.league.name, add, addProj: pj(add), drop, dropProj: drop ? pj(drop) : 0, lineupGain: gain, trendingAdds: trend.get(add) ?? 0, faab: b.format.faabBudget });
@@ -168,6 +180,20 @@ export function waiverPickups(b: LeagueBundle, players: PlayerMap, proj: Project
   return out.sort((a, c) => c.lineupGain - a.lineupGain);
 }
 
-export function allMoves(p: Portfolio, players: PlayerMap, proj: ProjectionMap, trending: { player_id: string; count: number }[]) {
-  return p.leagues.map((b) => ({ b, lineup: optimalLineup(b, players, proj), pickups: waiverPickups(b, players, proj, trending) }));
+/** Ids of rostered players whose game this week has already kicked off (needs the schedule). */
+export function lockedPlayers(b: LeagueBundle, players: PlayerMap, schedule: ScheduleMap | null | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!schedule) return out;
+  for (const id of b.myRoster?.players ?? []) {
+    const g = gameFor(schedule, players[id]?.team, b.week);
+    if (hasStarted(g)) out.add(id);
+  }
+  return out;
+}
+
+export function allMoves(p: Portfolio, players: PlayerMap, proj: ProjectionMap, trending: { player_id: string; count: number }[], schedule?: ScheduleMap | null) {
+  return p.leagues.map((b) => {
+    const locked = lockedPlayers(b, players, schedule);
+    return { b, locked, lineup: optimalLineup(b, players, proj, locked), pickups: waiverPickups(b, players, proj, trending, 3, locked) };
+  });
 }

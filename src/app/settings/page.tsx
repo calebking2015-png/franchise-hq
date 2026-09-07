@@ -5,8 +5,8 @@ import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Card, PageHeader, cx } from "@/components/ui";
 
 export default function SettingsPage() {
-  const { username, setUsername, portfolio, refresh, loading, lastUpdated } = usePortfolio();
-  const [draft, setDraft] = useState(username);
+  const { username, setUsername, recentUsernames, portfolio, refresh, loading, lastUpdated } = usePortfolio();
+  const [draft, setDraft] = useState(username ?? "");
   const prov = portfolio?.providers;
 
   return (
@@ -19,7 +19,10 @@ export default function SettingsPage() {
             <input id="u" className="field flex-1" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setUsername(draft)} autoCapitalize="none" autoCorrect="off" />
             <button type="button" className="btn btn-gold" onClick={() => setUsername(draft)} disabled={!draft.trim() || draft.trim() === username}>Load</button>
           </div>
-          <p className="caption mt-2">Read-only. Franchise HQ never changes lineups, waivers or trades — make moves in the Sleeper app.</p>
+          {recentUsernames.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2"><span className="caption">Switch:</span>{recentUsernames.map((u) => <button key={u} type="button" className={`chip ${u === username ? "chip-solid" : "chip-outline hover:border-gold"}`} onClick={() => { setDraft(u); setUsername(u); }}>{u}</button>)}</div>
+          )}
+          <p className="caption mt-2">Read-only. Franchise HQ never changes lineups, waivers or trades — make moves in the Sleeper app. Anyone with the link can enter their own Sleeper name here to see their leagues.</p>
           {portfolio && <dl className="grid grid-cols-2 gap-x-4 gap-y-1 mt-4 text-[13.5px]"><dt className="text-muted">Display name</dt><dd>{portfolio.user.display_name}</dd><dt className="text-muted">User id</dt><dd className="num">{portfolio.user.user_id}</dd><dt className="text-muted">Season</dt><dd className="num">{portfolio.season} · week {portfolio.week}</dd><dt className="text-muted">Leagues</dt><dd className="num">{portfolio.leagues.length}</dd></dl>}
         </Card>
 

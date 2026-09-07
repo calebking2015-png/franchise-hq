@@ -5,7 +5,7 @@ import { useState } from "react";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Ready } from "@/components/fantasy";
 import { Card, EmptyState, PageHeader, PlayerCell, Segmented, StatusBadge, TeamLogo, cx, fmtPts } from "@/components/ui";
-import { rootingInterests, teamRooting, type RootingInterest, type Side } from "@/lib/analysis/rooting";
+import { rootingInterests, teamRooting, rivalInterests, RIVALS_MIN_WEEK, type RootingInterest, type Side } from "@/lib/analysis/rooting";
 import type { PlayerMap } from "@/lib/sleeper/types";
 
 const LABEL: Record<Side, string> = { for: "Root for", against: "Root against", neutral: "Neutral" };
@@ -51,15 +51,16 @@ function Row({ r, players, max }: { r: RootingInterest; players: PlayerMap; max:
 
 export default function RootingPage() {
   const { projections } = usePortfolio();
-  const [side, setSide] = useState<Side>("for");
+  const [side, setSide] = useState<Side | "rivals">("for");
   return (
     <Ready>
       {(portfolio, players) => {
         const proj = projections?.projections ?? {};
         const all = rootingInterests(portfolio, players, proj);
-        const list = all.filter((r) => r.side === side);
+        const list = side === "rivals" ? [] : all.filter((r) => r.side === side);
+        const rivals = side === "rivals" ? rivalInterests(portfolio, players, proj) : [];
         const teams = teamRooting(all, players);
-        const teamList = side === "neutral" ? teams.filter((t) => Math.abs(t.stake) < 3) : teams.filter((t) => (side === "for" ? t.stake > 0 : t.stake < 0)).slice(0, 8);
+        const teamList = side === "rivals" ? [] : side === "neutral" ? teams.filter((t) => Math.abs(t.stake) < 3) : teams.filter((t) => (side === "for" ? t.stake > 0 : t.stake < 0)).slice(0, 8);
         const max = Math.max(...all.map((r) => Math.abs(r.stake)), 1);
         const counts = { for: all.filter((r) => r.side === "for").length, against: all.filter((r) => r.side === "against").length, neutral: all.filter((r) => r.side === "neutral").length };
         const hasProj = Object.keys(proj).length > 0;
@@ -67,10 +68,26 @@ export default function RootingPage() {
         return (
           <>
             <PageHeader title="Rooting interests" sub={<>Week {portfolio.week} · {all.length} players starting for or against you across {portfolio.leagues.filter((b) => b.matchup).length} matchups. {hasProj ? `Stakes weighted by Sleeper projections under each league's scoring.` : "Projections unavailable — stakes shown as starter counts."}</>}
-              actions={<Segmented value={side} onChange={setSide} options={[{ value: "for", label: "Root for", count: counts.for }, { value: "against", label: "Root against", count: counts.against }, { value: "neutral", label: "Neutral", count: counts.neutral }]} />} />
-            <p className="caption mb-4">{BLURB[side]}</p>
+              actions={<Segmented value={side} onChange={setSide} options={[{ value: "for", label: "Root for", count: counts.for }, { value: "against", label: "Root against", count: counts.against }, { value: "neutral", label: "Neutral", count: counts.neutral }, { value: "rivals", label: "Rivals" }]} />} />
+            <p className="caption mb-4">{side === "rivals" ? "Starters on the teams within one game of you in the standings (this week's opponent excluded — he's already in Root against). The people you quietly want to see fail." : BLURB[side]}</p>
+            {side === "rivals" && (
+              portfolio.week < RIVALS_MIN_WEEK ? <EmptyState title={`Rivals unlock in week ${RIVALS_MIN_WEEK}`} detail="Standings don't mean anything yet — every team is within a game of you. Check back once records separate." /> : (
+                <Card pad={false} title={<span className="text-urgent">Standings rivals</span>} actions={<span className="caption">{rivals.length} players · sorted by projected damage</span>}>
+                  {rivals.length === 0 ? <div className="p-4 caption">No team is within a game of you right now — you're either running away with it or well behind.</div> : (
+                    <div className="divide-y divide-line">
+                      {rivals.slice(0, 60).map((r) => { const p = players[r.playerId]; return (
+                        <div key={r.playerId} className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 py-2.5 px-4">
+                          <PlayerCell player={p} id={r.playerId} sub={p.team ?? "FA"} />
+                          <div className="text-right"><div className="num text-[18px] font-semibold text-urgent">{fmtPts(r.stake)}</div><div className="caption">{r.rivals.length} rival{r.rivals.length === 1 ? "" : "s"}</div></div>
+                          <div className="col-span-2 flex flex-wrap gap-1 text-[12px]">{r.rivals.map((x, i) => <Link key={i} href={`/leagues/${x.leagueId}`} className="chip bg-urgent/12 text-urgent hover:bg-urgent/20">{x.leagueName} · {x.team} ({x.record}){x.proj != null && <span className="num ml-1 opacity-80">{fmtPts(x.proj)}</span>}</Link>)}</div>
+                        </div>); })}
+                    </div>
+                  )}
+                </Card>
+              )
+            )}
 
-            {teamList.length > 0 && (
+            {side !== "rivals" && teamList.length > 0 && (
               <section className="mb-5">
                 <h2 className="h2 mb-2">NFL teams</h2>
                 <div className="flex flex-wrap gap-2">
@@ -88,11 +105,11 @@ export default function RootingPage() {
               </section>
             )}
 
-            <Card pad={false} title={<span className={TONE[side]}>{LABEL[side]}</span>} actions={<span className="caption">sorted by stake</span>}>
+            {side !== "rivals" && <Card pad={false} title={<span className={TONE[side]}>{LABEL[side]}</span>} actions={<span className="caption">sorted by stake</span>}>
               {list.length === 0 ? <div className="p-4 caption">Nobody in this bucket this week.</div> : (
                 <div className="divide-y divide-line">{list.map((r) => <Row key={r.playerId} r={r} players={players} max={max} />)}</div>
               )}
-            </Card>
+            </Card>}
             <p className="caption mt-4">Stake is calculated from your Sleeper lineups and opponents' lineups only. A player you start in two leagues and face in one shows as "2 for · 1 against" with the net projected points.</p>
           </>
         );
