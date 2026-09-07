@@ -116,7 +116,7 @@ export default function LeagueHub() {
                     ))}
                   </div>
                 )}
-                <div className="px-4 py-2 caption border-t border-line">Win probability and projected margin: <Unavailable what="projection provider not configured" />.</div>
+                <div className="px-4 py-2 caption border-t border-line">Projected totals and margin are on the Matchups page. Win probability needs a model and is not shown.</div>
               </Card>
             )}
 

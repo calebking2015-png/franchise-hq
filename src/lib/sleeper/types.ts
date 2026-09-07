@@ -140,6 +140,27 @@ export interface SleeperTrendingPlayer {
   count: number;
 }
 
+/** Raw row from Sleeper's weekly projections feed (undocumented; sourced from Rotowire). */
+export interface SleeperProjectionRaw {
+  player_id: string;
+  team: string | null;
+  opponent: string | null;
+  game_id: string | null;
+  date: string | null;
+  company?: string;
+  stats: Record<string, number>;
+}
+
+/** Trimmed projection we ship to the client. `stats` uses Sleeper scoring keys, so the scoring engine applies directly. */
+export interface Projection {
+  team: string | null;
+  opp: string | null;
+  gameId: string | null;
+  date: string | null;
+  stats: Record<string, number>;
+}
+export type ProjectionMap = Record<string, Projection>;
+
 export type InjuryStatus =
   | "Questionable" | "Doubtful" | "Out" | "IR" | "PUP" | "Sus" | "COV" | "NA" | "DNR" | string;
 

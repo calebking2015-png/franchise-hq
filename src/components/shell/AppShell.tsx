@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
+  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
 } from "lucide-react";
 import { usePortfolio } from "./PortfolioProvider";
 import { leagueAlerts, sortAlerts } from "@/lib/analysis/alerts";
@@ -17,7 +17,8 @@ const NAV = [
   { href: "/waivers", label: "Waivers", icon: Radar, mobile: true },
   { href: "/portfolio", label: "Portfolio", icon: PieChart },
   { href: "/players", label: "Players", icon: Users },
-  { href: "/matchups", label: "Matchups", icon: Swords },
+  { href: "/matchups", label: "Matchups", icon: Swords, mobile: true },
+  { href: "/rooting", label: "Rooting", icon: Megaphone },
   { href: "/trades", label: "Trades", icon: ArrowLeftRight },
   { href: "/dynasty", label: "Dynasty", icon: Crown, dynastyOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -100,7 +101,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 px-4 lg:px-6 py-5 pb-24 lg:pb-8 max-w-[1440px] w-full mx-auto">{children}</main>
 
         {/* Mobile bottom tabs */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-20 grid grid-cols-5 border-t border-line bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-20 grid grid-cols-6 border-t border-line bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
           {nav.filter((n) => n.mobile).map((n) => {
             const active = isActive(path, n.href);
             return (

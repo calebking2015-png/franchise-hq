@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import type { Portfolio, LeagueBundle } from "@/lib/portfolio/types";
-import type { PlayerMap } from "@/lib/sleeper/types";
+import type { PlayerMap, ProjectionMap } from "@/lib/sleeper/types";
+import { projectMatchup, projectPlayer } from "@/lib/projections";
 import type { Alert } from "@/lib/analysis/alerts";
 import { formatSummary, slotLabel } from "@/lib/league/format";
 import { myTeam, opponentTeam, recordStr, rosterGroups } from "@/lib/analysis/summary";
@@ -88,10 +89,12 @@ export function AlertGroupByLeague({ alerts, players, portfolio }: { alerts: Ale
 /* ---------- League card ---------- */
 
 export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: number }) {
+  const { players, projections } = usePortfolio();
   const me = myTeam(b);
   const opp = opponentTeam(b);
   const m = b.matchup;
   const live = m && m.oppPoints != null && (m.myPoints > 0 || m.oppPoints > 0);
+  const pm = m ? projectMatchup(b, players, projections?.projections ?? {}) : null;
   return (
     <Link href={`/leagues/${b.league.league_id}`} className="card p-4 flex flex-col gap-3 hover:border-line-2 focus-visible:border-gold">
       <div className="flex items-start justify-between gap-3">
@@ -114,7 +117,7 @@ export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: nu
         {m ? (
           <>
             <span className="truncate">{live ? <span className="num font-semibold text-[16px]">{fmtPts(m.myPoints)}</span> : <span className="text-muted">Week {b.week}</span>} <span className="text-muted">vs</span> {opp?.teamName ?? "TBD"}</span>
-            {live ? <span className="num font-semibold text-[16px]">{fmtPts(m.oppPoints)}</span> : <Unavailable what="Projection not configured" />}
+            {live ? <span className="num font-semibold text-[16px]">{fmtPts(m.oppPoints)}</span> : pm?.opp ? <span className={cx("num text-[13px]", pm.margin! > 0 ? "text-ok" : pm.margin! < 0 ? "text-urgent" : "text-muted")}>proj {fmtPts(pm.mine.total)}–{fmtPts(pm.opp.total)}</span> : <Unavailable what="No projection" />}
           </>
         ) : (
           <span className="text-muted">{b.league.status === "pre_draft" ? "Not yet drafted" : "No matchup this week"}</span>
@@ -127,9 +130,12 @@ export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: nu
 /* ---------- Lineup table ---------- */
 
 export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; players: PlayerMap; compact?: boolean }) {
+  const { projections } = usePortfolio();
+  const proj: ProjectionMap = projections?.projections ?? {};
   const g = rosterGroups(b);
   const m = b.matchup;
   const points = (pid: string | null, i: number) => (m && pid && m.myStarters[i] === pid ? m.myStarterPoints[i] : undefined);
+  const total = g.starters.reduce((n, s) => n + (s.playerId ? projectPlayer(s.playerId, b, players, proj) ?? 0 : 0), 0);
   return (
     <table className="data">
       <thead><tr><th style={{ width: 56 }}>Slot</th><th>Player</th>{!compact && <th className="hidden md:table-cell">Opp</th>}{!compact && <th className="hidden md:table-cell">Kick</th>}<th className="r">Proj</th><th className="r">Pts</th></tr></thead>
@@ -137,18 +143,21 @@ export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; 
         {g.starters.map((s, i) => {
           const p = s.playerId ? players[s.playerId] : undefined;
           const pts = points(s.playerId, i);
+          const pr = s.playerId ? projectPlayer(s.playerId, b, players, proj) : null;
+          const opp = s.playerId ? proj[s.playerId]?.opp : null;
           return (
             <tr key={`${s.slot}-${i}`} className={!s.playerId ? "bg-urgent/5" : ""}>
               <td><span className="chip chip-outline num">{slotLabel(s.slot)}</span></td>
               <td>{s.playerId ? <PlayerCell player={p} id={s.playerId} showHeadshot={!compact} /> : <span className="text-urgent font-medium">Empty slot</span>}</td>
+              {!compact && <td className="hidden md:table-cell text-muted">{opp ? (opp.startsWith("@") ? opp : `vs ${opp}`) : p?.team ? <span className="text-faint">BYE</span> : <Unavailable what="—" />}</td>}
               {!compact && <td className="hidden md:table-cell text-muted"><Unavailable what="—" /></td>}
-              {!compact && <td className="hidden md:table-cell text-muted"><Unavailable what="—" /></td>}
-              <td className="r"><Unavailable what="—" /></td>
+              <td className="r num">{pr != null ? fmtPts(pr) : <span className="text-faint">—</span>}</td>
               <td className="r num font-medium">{pts != null && pts !== 0 ? fmtPts(pts) : <span className="text-faint">—</span>}</td>
             </tr>
           );
         })}
       </tbody>
+      <tfoot><tr><td colSpan={compact ? 2 : 4} className="caption">Projected total</td><td className="r num font-semibold">{fmtPts(total)}</td><td className="r num font-semibold">{m && m.myPoints ? fmtPts(m.myPoints) : <span className="text-faint">—</span>}</td></tr></tfoot>
     </table>
   );
 }

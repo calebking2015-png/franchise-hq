@@ -19,7 +19,7 @@ export default function LineupsPage() {
         const list = view === "issues" ? withAlerts.filter((x) => x.alerts.length) : withAlerts;
         return (
           <>
-            <PageHeader title="Lineups" sub={`Every starting lineup for week ${portfolio.week}. Projections, opponents and kickoff times appear once a projection/schedule provider is configured.`}
+            <PageHeader title="Lineups" sub={`Every starting lineup for week ${portfolio.week}. Projections are Sleeper's, scored under each league's own settings. Kickoff times need a schedule provider.`}
               actions={<Segmented value={view} onChange={setView} options={[{ value: "all", label: "All leagues", count: portfolio.leagues.length }, { value: "issues", label: "With issues", count: withAlerts.filter((x) => x.alerts.length).length }]} />} />
             {list.length === 0 && <div className="caption">No lineup issues detected from Sleeper status flags.</div>}
             <div className="grid gap-4">

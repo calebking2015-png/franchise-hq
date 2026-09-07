@@ -2,13 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Portfolio } from "@/lib/portfolio/types";
-import type { PlayerMap, SleeperTrendingPlayer } from "@/lib/sleeper/types";
+import type { PlayerMap, ProjectionMap, SleeperTrendingPlayer } from "@/lib/sleeper/types";
 
 const DEFAULT_USERNAME = process.env.NEXT_PUBLIC_DEFAULT_USERNAME ?? "Poppysavage";
 const LS_USER = "fhq.username";
 const REFRESH_MS = 3 * 60 * 1000;
 
 export interface Trending { adds: SleeperTrendingPlayer[]; drops: SleeperTrendingPlayer[]; hours: number }
+export interface Projections { projections: ProjectionMap; season: string; week: number; source: string; fetchedAt: string }
 
 interface Ctx {
   username: string;
@@ -17,6 +18,7 @@ interface Ctx {
   players: PlayerMap;
   playersLoaded: boolean;
   trending: Trending | null;
+  projections: Projections | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -38,6 +40,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const [players, setPlayers] = useState<PlayerMap>({});
   const [playersLoaded, setPlayersLoaded] = useState(false);
   const [trending, setTrending] = useState<Trending | null>(null);
+  const [projections, setProjections] = useState<Projections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -63,6 +66,10 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
       const p = await getJson<Portfolio>(`/api/sleeper/portfolio?username=${encodeURIComponent(u)}`);
       setPortfolio(p);
       setLastUpdated(new Date());
+      // Projections follow the portfolio's week so they always match what the lineups show.
+      getJson<Projections>(`/api/sleeper/projections?season=${encodeURIComponent(p.season)}&week=${p.week}`)
+        .then(setProjections)
+        .catch(() => setProjections((prev) => prev));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -97,8 +104,8 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<Ctx>(
-    () => ({ username, setUsername, portfolio, players: merged, playersLoaded, trending, loading, error, refresh, lastUpdated }),
-    [username, setUsername, portfolio, merged, playersLoaded, trending, loading, error, refresh, lastUpdated],
+    () => ({ username, setUsername, portfolio, players: merged, playersLoaded, trending, projections, loading, error, refresh, lastUpdated }),
+    [username, setUsername, portfolio, merged, playersLoaded, trending, projections, loading, error, refresh, lastUpdated],
   );
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

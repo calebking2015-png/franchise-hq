@@ -21,7 +21,8 @@ Production: `npm run build && npm start`. Deploys to Netlify (Next.js runtime) o
 - **Waivers** — Sleeper trending adds × availability in each league × your positional depth; drops you own
 - **Portfolio** — player exposure, NFL team exposure, position totals, concentration + injury warnings
 - **Players** — search, universal player page with owned / available / owned-by-others per league
-- **Matchups** — live scores grouped Ahead / Close / Behind
+- **Matchups** — projected totals and margin per league (Sleeper/Rotowire projections scored under each league's settings), live scores replace projections as games finish
+- **Rooting** — Root for / Root against / Neutral: every player starting for or against you this week, weighted by projected points, rolled up to NFL teams
 - **Dynasty** — roster age + taxi (only appears when you have a dynasty league)
 - **Trades / Settings** — provider status; trade tools arrive in Phase 3
 
@@ -35,7 +36,8 @@ src/lib/scoring      League-specific scoring engine (reads scoring_settings, TE 
 src/lib/league       Format detection: dynasty/redraft, SF, PPR, FAAB, slot eligibility
 src/lib/analysis     Alerts, exposure, waiver radar, summaries — pure functions
 src/lib/portfolio    Normalized Portfolio model + server-side assembly
-src/app/api/sleeper  Route handlers: /portfolio, /players (trimmed, 24h cache), /trending, /league
+src/app/api/sleeper  Route handlers: /portfolio, /players (trimmed, 24h cache), /trending, /league, /projections
+src/lib/projections  Stat-line projections → points under each league's scoring; lineup + matchup totals
 src/components       ui primitives, app shell, fantasy components
 fixtures/            Dev-only mock of Sleeper's API shape for offline UI testing
 ```
@@ -51,6 +53,6 @@ SLEEPER_API_BASE=http://localhost:4010/v1 npm run dev
 
 ## Roadmap
 
-Phase 2: projection provider → scoring engine → lineup optimizer, start/sit, projected matchups, rooting interests, Sunday Mode.
+Phase 2 (in progress): projections ✓, projected matchups ✓, rooting interests ✓ → lineup optimizer, start/sit, kickoff times / Sunday Mode.
 Phase 3: dynasty values, pick inventory, contender/rebuilder, trade analyzer + finder.
 Phase 4: AI assistant over the structured Portfolio model.

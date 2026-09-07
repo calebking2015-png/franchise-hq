@@ -94,8 +94,21 @@ class NullSchedule implements ScheduleProvider {
 /** Injury/status flags come from Sleeper's player feed. */
 export const SleeperInjuryProvider: InjuryProvider = { name: "sleeper", configured: true };
 
+/** Sleeper's weekly projections (Rotowire-sourced). Fetched in bulk by /api/sleeper/projections; the
+ *  scoring engine converts the raw stat line into points under each league's own scoring_settings. */
+class SleeperProjection implements ProjectionProvider {
+  name = "Sleeper / Rotowire"; configured = true;
+  async weekly(playerId: string, season: string, week: number) {
+    const { sleeper, trimProjections } = await import("@/lib/sleeper/client");
+    const map = trimProjections(await sleeper.projectionsRaw(season, week));
+    const p = map[playerId];
+    return p ? ({ value: p.stats, source: "third-party", provider: this.name } as Sourced<StatLine>) : unavailable<StatLine>("No projection for this player");
+  }
+}
+void NullProjection;
+
 export const providers = {
-  projection: new NullProjection() as ProjectionProvider,
+  projection: new SleeperProjection() as ProjectionProvider,
   ranking: new NullRanking() as RankingProvider,
   injury: SleeperInjuryProvider,
   news: new NullNews() as NewsProvider,

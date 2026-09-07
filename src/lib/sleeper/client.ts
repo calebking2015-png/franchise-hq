@@ -5,10 +5,12 @@
 import type {
   SleeperUser, SleeperNflState, SleeperLeague, SleeperRoster, SleeperLeagueUser,
   SleeperMatchup, SleeperTradedPick, SleeperTransaction, SleeperTrendingPlayer,
-  SleeperPlayerRaw, Player, PlayerMap,
+  SleeperPlayerRaw, Player, PlayerMap, SleeperProjectionRaw, ProjectionMap,
 } from "./types";
 
 const BASE = process.env.SLEEPER_API_BASE ?? "https://api.sleeper.app/v1";
+/** Projections live outside /v1 on the same host. */
+const ROOT = BASE.replace(/\/v1\/?$/, "");
 
 /** Cache lifetimes (seconds). Player metadata is static-ish; matchups move fast. */
 export const TTL = {
@@ -22,6 +24,7 @@ export const TTL = {
   tradedPicks: 60 * 60,
   trending: 60 * 15,
   players: 60 * 60 * 24,
+  projections: 60 * 30,
 } as const;
 
 export class SleeperError extends Error {
@@ -30,8 +33,8 @@ export class SleeperError extends Error {
   }
 }
 
-async function get<T>(path: string, revalidate: number): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+async function get<T>(path: string, revalidate: number, base = BASE): Promise<T> {
+  const res = await fetch(`${base}${path}`, {
     headers: { accept: "application/json" },
     next: { revalidate },
   });
@@ -62,7 +65,27 @@ export const sleeper = {
   trendingDrops: (hours = 24, limit = 50) =>
     get<SleeperTrendingPlayer[]>(`/players/nfl/trending/drop?lookback_hours=${hours}&limit=${limit}`, TTL.trending),
   playersRaw: () => get<Record<string, SleeperPlayerRaw>>("/players/nfl", TTL.players),
+  /** Weekly stat projections for every fantasy position (Sleeper's in-app numbers, via Rotowire). */
+  projectionsRaw: (season: string, week: number) =>
+    get<SleeperProjectionRaw[] | null>(
+      `/projections/nfl/${season}/${week}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF`,
+      TTL.projections,
+      ROOT,
+    ),
 };
+
+/** Keep only players with a real projection and only numeric stat keys (drops ADP fields). */
+export function trimProjections(rows: SleeperProjectionRaw[] | null): ProjectionMap {
+  const out: ProjectionMap = {};
+  for (const r of rows ?? []) {
+    const st = r.stats ?? {};
+    if (!(st.pts_ppr || st.pts_half_ppr || st.pts_std || st.gp)) continue;
+    const stats: Record<string, number> = {};
+    for (const [k, v] of Object.entries(st)) if (typeof v === "number" && !k.startsWith("adp_")) stats[k] = v;
+    out[r.player_id] = { team: r.team ?? null, opp: r.opponent ?? null, gameId: r.game_id ?? null, date: r.date ?? null, stats };
+  }
+  return out;
+}
 
 const FANTASY_POS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
 
