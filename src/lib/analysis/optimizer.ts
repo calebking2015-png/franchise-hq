@@ -25,6 +25,8 @@ export interface OptimalLineup {
   swaps: Swap[];
   /** Current starters with no projection (bye / inactive) — the reason many swaps exist. */
   zeroStarters: string[];
+  /** Players who stay in the lineup but change slot to make room (e.g. Godwin FLEX → WR). */
+  reshuffles: { playerId: string; from: string; to: string }[];
 }
 
 export interface Swap {
@@ -92,6 +94,24 @@ export function optimalLineup(b: LeagueBundle, players: PlayerMap, proj: Project
   const pick: (string | null)[] = slots.map((_, i) => fixed.get(i) ?? null);
   openIdx.forEach((i, k) => { pick[i] = solved[k]; });
 
+  // Keep players in their current slots wherever it's legal: the solver treats equivalent
+  // assignments as interchangeable, so without this Chase and Olave would "move" WR↔FLEX for no gain.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < slots.length; i++) {
+      const id = pick[i];
+      if (!id || fixed.has(i)) continue;
+      const home = current.indexOf(id); // slot this player is in right now
+      if (home < 0 || home === i || fixed.has(home)) continue;
+      const other = pick[home];
+      // Swap if the player sitting in his old slot can legally take the slot we gave him.
+      if (slotAccepts(slots[home], players[id].pos) && (!other || slotAccepts(slots[i], players[other].pos))) {
+        pick[home] = id; pick[i] = other; changed = true;
+      }
+    }
+  }
+
   const assigned = slots.map((slot, i) => ({ slot, playerId: pick[i], proj: pj(pick[i]) }));
   const total = assigned.reduce((n, a) => n + a.proj, 0);
   const currentTotal = current.reduce((n, id) => n + pj(id), 0);
@@ -114,8 +134,16 @@ export function optimalLineup(b: LeagueBundle, players: PlayerMap, proj: Project
     const reason = !out ? "Slot is empty" : isHardOut(op) ? `${op?.name} is ${op?.injury ?? op?.status}` : pj(out) === 0 ? `${op?.name} has no projection (bye/inactive)` : `${op?.name} projects ${pj(out).toFixed(1)}`;
     swaps.push({ slot: a.slot, out, in: a.playerId!, gain: Math.round(gain * 10) / 10, reason });
   }
+  const reshuffles: { playerId: string; from: string; to: string }[] = [];
+  current.forEach((id, i) => {
+    if (!id || id === "0" || !recSet.has(id)) return;
+    const j = assigned.findIndex((a) => a.playerId === id);
+    if (j >= 0 && slots[j] !== slots[i]) reshuffles.push({ playerId: id, from: slots[i], to: slots[j] });
+  });
+
   return {
     slots: assigned,
+    reshuffles,
     total: Math.round(total * 100) / 100,
     currentTotal: Math.round(currentTotal * 100) / 100,
     gain: Math.round((total - currentTotal) * 10) / 10,

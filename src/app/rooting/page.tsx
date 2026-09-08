@@ -7,6 +7,7 @@ import { Ready } from "@/components/fantasy";
 import { Card, EmptyState, PageHeader, PlayerCell, Segmented, StatusBadge, TeamLogo, cx, fmtPts } from "@/components/ui";
 import { rootingInterests, teamRooting, rivalInterests, RIVALS_MIN_WEEK, type RootingInterest, type Side } from "@/lib/analysis/rooting";
 import type { PlayerMap } from "@/lib/sleeper/types";
+import { gameFor } from "@/lib/schedule";
 
 const LABEL: Record<Side, string> = { for: "Root for", against: "Root against", neutral: "Neutral" };
 const TONE: Record<Side, string> = { for: "text-ok", against: "text-urgent", neutral: "text-muted" };
@@ -50,16 +51,21 @@ function Row({ r, players, max }: { r: RootingInterest; players: PlayerMap; max:
 }
 
 export default function RootingPage() {
-  const { projections } = usePortfolio();
+  const { projections, schedule } = usePortfolio();
   const [side, setSide] = useState<Side | "rivals">("for");
+  const [day, setDay] = useState<string>("all");
   return (
     <Ready>
       {(portfolio, players) => {
         const proj = projections?.projections ?? {};
         const all = rootingInterests(portfolio, players, proj);
-        const list = side === "rivals" ? [] : all.filter((r) => r.side === side);
+        const dayOf = (pid: string) => { const g = gameFor(schedule, players[pid]?.team, portfolio.week); return g?.date ?? null; };
+        const days = [...new Set(all.map((r) => dayOf(r.playerId)).filter(Boolean) as string[])].sort();
+        const dayLabel = (d: string) => { const x = new Date(d + "T12:00:00"); return `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][x.getDay()]} ${x.getMonth() + 1}/${x.getDate()}`; };
+        const inDay = (pid: string) => day === "all" || dayOf(pid) === day;
+        const list = side === "rivals" ? [] : all.filter((r) => r.side === side && inDay(r.playerId));
         const rivals = side === "rivals" ? rivalInterests(portfolio, players, proj) : [];
-        const teams = teamRooting(all, players);
+        const teams = teamRooting(all.filter((r) => inDay(r.playerId)), players);
         const teamList = side === "rivals" ? [] : side === "neutral" ? teams.filter((t) => Math.abs(t.stake) < 3) : teams.filter((t) => (side === "for" ? t.stake > 0 : t.stake < 0)).slice(0, 8);
         const max = Math.max(...all.map((r) => Math.abs(r.stake)), 1);
         const counts = { for: all.filter((r) => r.side === "for").length, against: all.filter((r) => r.side === "against").length, neutral: all.filter((r) => r.side === "neutral").length };
@@ -69,6 +75,9 @@ export default function RootingPage() {
           <>
             <PageHeader title="Rooting interests" sub={<>Week {portfolio.week} · {all.length} players starting for or against you across {portfolio.leagues.filter((b) => b.matchup).length} matchups. {hasProj ? `Stakes weighted by Sleeper projections under each league's scoring.` : "Projections unavailable — stakes shown as starter counts."}</>}
               actions={<Segmented value={side} onChange={setSide} options={[{ value: "for", label: "Root for", count: counts.for }, { value: "against", label: "Root against", count: counts.against }, { value: "neutral", label: "Neutral", count: counts.neutral }, { value: "rivals", label: "Rivals" }]} />} />
+            {days.length > 1 && side !== "rivals" && (
+              <div className="mb-3"><Segmented value={day} onChange={setDay} options={[{ value: "all", label: "All games" }, ...days.map((d) => ({ value: d, label: dayLabel(d) }))]} /></div>
+            )}
             <p className="caption mb-4">{side === "rivals" ? "Starters on the teams within one game of you in the standings (this week's opponent excluded — he's already in Root against). The people you quietly want to see fail." : BLURB[side]}</p>
             {side === "rivals" && (
               portfolio.week < RIVALS_MIN_WEEK ? <EmptyState title={`Rivals unlock in week ${RIVALS_MIN_WEEK}`} detail="Standings don't mean anything yet — every team is within a game of you. Check back once records separate." /> : (

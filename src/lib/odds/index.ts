@@ -56,7 +56,7 @@ export async function fetchOdds(): Promise<{ configured: boolean; odds: OddsMap;
   const key = process.env.ODDS_API_KEY;
   if (!key) return { configured: false, odds: {}, note: "Set ODDS_API_KEY to enable Vegas totals (free tier at the-odds-api.com)." };
   const url = `https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?apiKey=${encodeURIComponent(key)}&regions=us&markets=spreads,totals&oddsFormat=american`;
-  const res = await fetch(url, { next: { revalidate: 60 * 30 } });
+  const res = await fetch(url, { next: { revalidate: 60 * 60 * 6 } });
   if (!res.ok) return { configured: true, odds: {}, note: `Odds API responded ${res.status}` };
   return { configured: true, odds: buildOdds((await res.json()) as OddsEvent[]) };
 }

@@ -19,16 +19,41 @@ function Vegas({ team }: { team: string | null | undefined }) {
   return <span className="caption num" title="Implied team total · game total">imp {l.implied} · o/u {l.total}</span>;
 }
 
-function SwapRow({ s, players }: { s: OptimalLineup["swaps"][number]; players: PlayerMap }) {
+function SwapRow({ s, players, outSlot }: { s: OptimalLineup["swaps"][number]; players: PlayerMap; outSlot: string | null }) {
   const inP = players[s.in]; const outP = s.out ? players[s.out] : undefined;
+  const crossSlot = outSlot && outSlot !== s.slot;
   return (
     <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-2 px-4 py-2.5">
-      <span className="chip chip-outline num">{slotLabel(s.slot)}</span>
+      <span className="chip chip-outline num" title={crossSlot ? `${inP?.name} goes into ${slotLabel(s.slot)}; ${outP?.name} comes out of ${slotLabel(outSlot)}. Someone shifts slots to make it legal — see the reshuffle line.` : undefined}>{crossSlot ? `${slotLabel(outSlot)}→${slotLabel(s.slot)}` : slotLabel(s.slot)}</span>
       <div className="min-w-0"><div className="caption">Start</div><PlayerCell player={inP} id={s.in} showHeadshot={false} /><Vegas team={inP?.team} /></div>
       <span className="text-muted">→</span>
       <div className="min-w-0"><div className="caption">Sit</div>{outP ? <><PlayerCell player={outP} id={s.out!} showHeadshot={false} /><Vegas team={outP.team} /></> : <span className="text-urgent">Empty slot</span>}</div>
       <div className="text-right"><div className="num text-ok font-semibold text-[16px]">+{fmtPts(s.gain)}</div><div className="caption max-w-[14ch] truncate" title={s.reason}>{s.reason}</div></div>
     </div>
+  );
+}
+
+/** Full before/after lineup so a multi-slot chain is unambiguous. */
+function ResultingLineup({ lineup, current, players }: { lineup: OptimalLineup; current: string[]; players: PlayerMap }) {
+  return (
+    <table className="tbl text-[13px]">
+      <thead><tr><th>Slot</th><th>Now</th><th></th><th>Recommended</th><th className="r">Proj</th></tr></thead>
+      <tbody>
+        {lineup.slots.map((a, i) => {
+          const cur = current[i] && current[i] !== "0" ? current[i] : null;
+          const changed = cur !== a.playerId;
+          return (
+            <tr key={i} className={changed ? "bg-ok/5" : ""}>
+              <td><span className="chip chip-outline num">{slotLabel(a.slot)}</span></td>
+              <td className={changed ? "text-muted line-through decoration-line-2" : ""}>{cur ? players[cur]?.name : <span className="text-urgent">Empty</span>}</td>
+              <td className="text-muted">{changed ? "→" : ""}</td>
+              <td className={changed ? "font-medium" : "text-muted"}>{a.playerId ? players[a.playerId]?.name : <span className="text-urgent">Empty</span>}</td>
+              <td className="r num">{fmtPts(a.proj)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -77,7 +102,20 @@ export default function MovesPage() {
                   {lineup && lineup.swaps.length > 0 && (
                     <div className="divide-y divide-line">
                       <div className="px-4 py-2 caption bg-surface-2">Start / sit</div>
-                      {lineup.swaps.map((s) => <SwapRow key={s.in} s={s} players={players} />)}
+                      {lineup.swaps.map((s) => {
+                        const outIdx = s.out ? (b.myRoster?.starters ?? []).indexOf(s.out) : -1;
+                        return <SwapRow key={s.in} s={s} players={players} outSlot={outIdx >= 0 ? lineup.slots[outIdx]?.slot ?? null : null} />;
+                      })}
+                      {lineup.reshuffles.length > 0 && (
+                        <div className="px-4 py-2 text-[12.5px] text-muted flex flex-wrap gap-x-3 gap-y-1">
+                          <span className="caption">To make it legal, also move:</span>
+                          {lineup.reshuffles.map((r) => <span key={r.playerId}><span className="text-fg">{players[r.playerId]?.name}</span> {slotLabel(r.from)} → {slotLabel(r.to)}</span>)}
+                        </div>
+                      )}
+                      <details className="px-4 py-2">
+                        <summary className="caption cursor-pointer hover:text-gold">Show resulting lineup</summary>
+                        <div className="mt-2 overflow-x-auto"><ResultingLineup lineup={lineup} current={b.myRoster?.starters ?? []} players={players} /></div>
+                      </details>
                     </div>
                   )}
                   {pickups.length > 0 && (
