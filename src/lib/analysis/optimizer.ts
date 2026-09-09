@@ -123,11 +123,20 @@ export function optimalLineup(b: LeagueBundle, players: PlayerMap, proj: Project
   const outgoing = current.map((id, i) => ({ id: id && id !== "0" ? id : null, slot: slots[i] })).filter((x) => !x.id || !recSet.has(x.id));
   const swaps: Swap[] = [];
   const outLeft = [...outgoing].sort((a, b) => pj(a.id) - pj(b.id));
+  // Pair each newcomer with the displaced starter that makes the most sense to a human:
+  // same position first, then someone whose old slot the newcomer could sit in, then anyone.
+  const score = (inId: string, inSlot: string, o: { id: string | null; slot: string }) => {
+    const ip = players[inId].pos; const op = o.id ? players[o.id].pos : null;
+    if (op === ip) return 3;
+    if (slotAccepts(o.slot, ip)) return 2;
+    if (op && slotAccepts(inSlot, op)) return 1;
+    return 0;
+  };
   for (const a of incoming.sort((x, y) => y.proj - x.proj)) {
-    // Pair with the weakest displaced starter whose slot the newcomer could reasonably fill, else any.
-    let idx = outLeft.findIndex((o) => slotAccepts(o.slot, players[a.playerId!].pos) || slotAccepts(a.slot, o.id ? players[o.id].pos : ""));
-    if (idx < 0) idx = 0;
-    const o = outLeft.splice(idx, 1)[0];
+    if (outLeft.length === 0) break;
+    let bi = 0, bs = -1;
+    outLeft.forEach((o, i) => { const sc = score(a.playerId!, a.slot, o); if (sc > bs || (sc === bs && pj(o.id) < pj(outLeft[bi].id))) { bs = sc; bi = i; } });
+    const o = outLeft.splice(bi, 1)[0];
     const out = o?.id ?? null;
     const gain = a.proj - pj(out);
     const op = out ? players[out] : undefined;

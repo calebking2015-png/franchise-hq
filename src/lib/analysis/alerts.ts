@@ -34,6 +34,23 @@ export function isHardOut(p: Player | undefined) {
   return false;
 }
 
+/**
+ * Can this player legally go on IR in this league? Sleeper exposes the commissioner's IR rules
+ * (reserve_allow_out / _sus / _cov / _na / _dnr / _doubtful). Real IR/PUP is always allowed.
+ */
+export function irEligible(p: Player | undefined, league: LeagueBundle["league"]): boolean {
+  if (!p) return false;
+  const st = league.settings ?? {};
+  if (p.injury === "IR" || p.injury === "PUP" || /injured reserve|pup/i.test(p.status ?? "")) return true;
+  if (p.injury === "Out") return !!st.reserve_allow_out;
+  if (p.injury === "Sus" || /suspended/i.test(p.status ?? "")) return !!st.reserve_allow_sus;
+  if (p.injury === "COV") return !!st.reserve_allow_cov;
+  if (p.injury === "NA") return !!st.reserve_allow_na;
+  if (p.injury === "DNR") return !!st.reserve_allow_dnr;
+  if (p.injury === "Doubtful") return !!st.reserve_allow_doubtful;
+  return false;
+}
+
 export function statusLabel(p: Player | undefined): string | null {
   if (!p) return null;
   if (p.injury) return p.injury;
@@ -86,15 +103,18 @@ export function leagueAlerts(b: LeagueBundle, players: PlayerMap): Alert[] {
   const irSlots = b.format.irSlots;
   const reserve = roster.reserve ?? [];
   if (irSlots > 0 && reserve.length < irSlots) {
-    const eligible = bench.filter((id) => isHardOut(players[id]));
-    for (const id of eligible) {
+    for (const id of bench) {
       const p = players[id];
-      push({ kind: "ir_slot_open", severity: "warning", playerId: id, title: `Move ${p.name} to IR`, detail: `${p.injury ?? p.status}. You have ${irSlots - reserve.length} open IR slot${irSlots - reserve.length === 1 ? "" : "s"} — free a bench spot.`, source: "calculated" });
+      if (!isHardOut(p)) continue;
+      if (irEligible(p, b.league))
+        push({ kind: "ir_slot_open", severity: "warning", playerId: id, title: `Move ${p.name} to IR`, detail: `${p.injury ?? p.status}. You have ${irSlots - reserve.length} open IR slot${irSlots - reserve.length === 1 ? "" : "s"} — free a bench spot.`, source: "calculated" });
+      else
+        push({ kind: "injured_bench", severity: "info", playerId: id, title: `${p.name} (${p.injury ?? p.status}) on bench`, detail: `This league doesn't allow ${p.injury === "Sus" ? "suspended" : p.injury ?? "this status"} players on IR — he has to hold a bench spot or be dropped.`, source: "calculated" });
     }
   }
   for (const id of reserve) {
     const p = players[id];
-    if (p && !isHardOut(p) && p.team)
+    if (p && p.team && !irEligible(p, b.league))
       push({ kind: "healthy_on_ir", severity: "warning", playerId: id, title: `${p.name} may be IR-ineligible`, detail: `Listed ${p.injury ?? p.status ?? "healthy"} — Sleeper may lock your lineup until he's moved.`, source: "calculated" });
   }
 
@@ -106,6 +126,8 @@ export function leagueAlerts(b: LeagueBundle, players: PlayerMap): Alert[] {
       push({ kind: "free_agent_rostered", severity: "info", playerId: id, title: `${p.name} has no NFL team`, detail: "Occupying a bench spot as a free agent.", source: "sleeper" });
     else if (isHardOut(p) && irSlots === 0)
       push({ kind: "injured_bench", severity: "info", playerId: id, title: `${p.name} (${p.injury ?? p.status}) on bench`, detail: "No IR slots in this league — consider whether the spot is worth holding.", source: "calculated" });
+    else if (isHardOut(p) && reserve.length >= irSlots && irEligible(p, b.league))
+      push({ kind: "injured_bench", severity: "info", playerId: id, title: `${p.name} (${p.injury ?? p.status}) on bench`, detail: "IR is full — he's eligible if a slot opens up.", source: "calculated" });
   }
 
   return alerts;
