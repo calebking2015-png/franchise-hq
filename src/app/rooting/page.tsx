@@ -7,7 +7,7 @@ import { Ready } from "@/components/fantasy";
 import { Card, EmptyState, PageHeader, PlayerCell, Segmented, StatusBadge, TeamLogo, cx, fmtPts } from "@/components/ui";
 import { rootingInterests, teamRooting, rivalInterests, RIVALS_MIN_WEEK, type RootingInterest, type Side } from "@/lib/analysis/rooting";
 import type { PlayerMap } from "@/lib/sleeper/types";
-import { gameFor } from "@/lib/schedule";
+import { gameFor, hasStarted } from "@/lib/schedule";
 
 const LABEL: Record<Side, string> = { for: "Root for", against: "Root against", neutral: "Neutral" };
 const TONE: Record<Side, string> = { for: "text-ok", against: "text-urgent", neutral: "text-muted" };
@@ -38,13 +38,13 @@ function Row({ r, players, max }: { r: RootingInterest; players: PlayerMap; max:
         <StatusBadge player={p} />
       </div>
       <div className="text-right">
-        <div className={cx("num text-[20px] font-semibold leading-none", TONE[r.side])}>{r.stake > 0 ? "+" : ""}{fmtPts(r.stake)}</div>
-        <div className="caption num">{r.forCount ? `${r.forCount} for` : ""}{r.forCount && r.againstCount ? " · " : ""}{r.againstCount ? `${r.againstCount} against` : ""}</div>
+        <div className={cx("num text-[20px] font-semibold leading-none", TONE[r.side])}>{r.stake > 0 ? "+" : ""}{fmtPts(r.stake)}{r.live && <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-ok align-middle">live</span>}</div>
+        <div className="caption num">{r.live ? `proj ${r.projStake > 0 ? "+" : ""}${fmtPts(r.projStake)} · ` : ""}{r.forCount ? `${r.forCount} for` : ""}{r.forCount && r.againstCount ? " · " : ""}{r.againstCount ? `${r.againstCount} against` : ""}</div>
       </div>
       <div className="col-span-2"><StakeBar r={r} max={max} /></div>
       <div className="col-span-2 flex flex-wrap gap-1 text-[12px]">
-        {forL.map((l) => <Link key={l.leagueId + "f"} href={`/leagues/${l.leagueId}`} className="chip bg-ok/12 text-ok hover:bg-ok/20">{l.leagueName}{l.proj != null && <span className="num ml-1 opacity-80">{fmtPts(l.proj)}</span>}</Link>)}
-        {agL.map((l) => <Link key={l.leagueId + "a"} href={`/leagues/${l.leagueId}`} className="chip bg-urgent/12 text-urgent hover:bg-urgent/20">{l.leagueName} · {l.team}{l.proj != null && <span className="num ml-1 opacity-80">{fmtPts(l.proj)}</span>}</Link>)}
+        {forL.map((l) => <Link key={l.leagueId + "f"} href={`/leagues/${l.leagueId}`} className="chip bg-ok/12 text-ok hover:bg-ok/20">{l.leagueName}<span className="num ml-1 opacity-80">{l.actual != null ? fmtPts(l.actual) : l.proj != null ? fmtPts(l.proj) : ""}</span></Link>)}
+        {agL.map((l) => <Link key={l.leagueId + "a"} href={`/leagues/${l.leagueId}`} className="chip bg-urgent/12 text-urgent hover:bg-urgent/20">{l.leagueName} · {l.team}<span className="num ml-1 opacity-80">{l.actual != null ? fmtPts(l.actual) : l.proj != null ? fmtPts(l.proj) : ""}</span></Link>)}
       </div>
     </div>
   );
@@ -58,7 +58,8 @@ export default function RootingPage() {
     <Ready>
       {(portfolio, players) => {
         const proj = projections?.projections ?? {};
-        const all = rootingInterests(portfolio, players, proj);
+        const all = rootingInterests(portfolio, players, proj, (pid) => hasStarted(gameFor(schedule, players[pid]?.team, portfolio.week)));
+        const anyLive = all.some((r) => r.live);
         const dayOf = (pid: string) => { const g = gameFor(schedule, players[pid]?.team, portfolio.week); return g?.date ?? null; };
         const days = [...new Set(all.map((r) => dayOf(r.playerId)).filter(Boolean) as string[])].sort();
         const dayLabel = (d: string) => { const x = new Date(d + "T12:00:00"); return `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][x.getDay()]} ${x.getMonth() + 1}/${x.getDate()}`; };
@@ -73,7 +74,7 @@ export default function RootingPage() {
         if (all.length === 0) return <><PageHeader title="Rooting interests" /><EmptyState title="No matchups yet" detail="Sleeper hasn't published this week's matchups, so there's nobody to root for or against." /></>;
         return (
           <>
-            <PageHeader title="Rooting interests" sub={<>Week {portfolio.week} · {all.length} players starting for or against you across {portfolio.leagues.filter((b) => b.matchup).length} matchups. {hasProj ? `Stakes weighted by Sleeper projections under each league's scoring.` : "Projections unavailable — stakes shown as starter counts."}</>}
+            <PageHeader title="Rooting interests" sub={<>Week {portfolio.week} · {all.length} players starting for or against you across {portfolio.leagues.filter((b) => b.matchup).length} matchups. {anyLive ? "Games underway — stakes use actual points for anyone who has kicked off, projections for everyone else." : hasProj ? `Stakes weighted by Sleeper projections under each league's scoring.` : "Projections unavailable — stakes shown as starter counts."}</>}
               actions={<Segmented value={side} onChange={setSide} options={[{ value: "for", label: "Root for", count: counts.for }, { value: "against", label: "Root against", count: counts.against }, { value: "neutral", label: "Neutral", count: counts.neutral }, { value: "rivals", label: "Rivals" }]} />} />
             {days.length > 1 && side !== "rivals" && (
               <div className="mb-3"><Segmented value={day} onChange={setDay} options={[{ value: "all", label: "All games" }, ...days.map((d) => ({ value: d, label: dayLabel(d) }))]} /></div>
