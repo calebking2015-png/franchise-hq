@@ -5,7 +5,7 @@ import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Card, PageHeader, cx } from "@/components/ui";
 
 export default function SettingsPage() {
-  const { username, setUsername, recentUsernames, portfolio, refresh, loading, lastUpdated, projSource, setProjSource, goldenBoy, sleeperProjections } = usePortfolio();
+  const { username, setUsername, recentUsernames, portfolio, refresh, loading, lastUpdated } = usePortfolio();
   const [draft, setDraft] = useState(username ?? "");
   const prov = portfolio?.providers;
 
@@ -33,32 +33,11 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        <Card title="Projection source" className="lg:col-span-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {([["sleeper", "Sleeper"], ["goldenboy", "Golden Boy"], ["blend", "Blend"]] as const).map(([v, label]) => (
-              <button key={v} type="button" onClick={() => setProjSource(v)} disabled={v !== "sleeper" && !goldenBoy?.count}
-                className={cx("chip text-[13px] px-3 py-1.5", projSource === v ? "chip-solid" : "chip-outline hover:border-gold", v !== "sleeper" && !goldenBoy?.count && "opacity-50")}>{label}</button>
-            ))}
-            <span className="caption ml-1">
-              {projSource === "sleeper" && "Sleeper's projections (Rotowire). "}
-              {projSource === "goldenboy" && "Fantasy Golden Boy stat lines scored under each league's settings; Sleeper fills K, DEF and anyone he doesn't project. "}
-              {projSource === "blend" && "Average of both feeds, stat by stat. "}
-              Applies to Lineups, Moves, Matchups and Rooting on this device.
-            </span>
-          </div>
-          <div className="caption mt-3">
-            Golden Boy feed: {goldenBoy?.error ? <span className="text-urgent">{goldenBoy.error}</span> : goldenBoy ? <>{goldenBoy.count} players matched of {goldenBoy.rows} rows{goldenBoy.unmatched.length ? ` · unmatched: ${goldenBoy.unmatched.map((u) => u.name).join(", ")}` : ""}</> : "loading…"}
-            {" · "}Sleeper feed: {sleeperProjections ? `${Object.keys(sleeperProjections.projections).length} players` : "loading…"}
-            {" · "}<a href={goldenBoy?.url ?? "https://fantasygoldenboy.com/nfl-projections/"} target="_blank" rel="noreferrer" className="text-gold hover:underline">fantasygoldenboy.com</a>, used with permission.
-          </div>
-        </Card>
-
         <Card title="Data providers" className="lg:col-span-2" pad={false}>
           <table className="data"><thead><tr><th>Provider</th><th>Status</th><th>Unlocks</th></tr></thead><tbody>
             {[
               ["Sleeper", prov?.sleeper, "Leagues, rosters, matchups, injury flags, trending adds"],
               ["Projections", prov?.projection, "Start/sit, lineup optimizer, projected margins, FAAB guidance"],
-              ["Golden Boy", { configured: !!goldenBoy?.count }, "Second projection source; Compare page; TD% on player rows"],
               ["Rankings", prov?.ranking, "Waiver add/drop recommendations, drop candidates"],
               ["Schedule", prov?.schedule, "Bye weeks, kickoff times, lineup-lock warnings, Sunday Mode ordering"],
               ["Dynasty values", prov?.dynastyValue, "Contender/rebuilder classification, trade analyzer"],

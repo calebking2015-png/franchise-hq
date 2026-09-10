@@ -12,13 +12,7 @@ export function projectPlayer(pid: string, b: LeagueBundle, players: PlayerMap, 
   const pr = proj[pid];
   const p = players[pid];
   if (!pr || !p) return null;
-  const sc = b.league.scoring_settings ?? {};
-  // Golden Boy QBs: his headline points (4-pt pass TD basis), shifted for leagues that pay 6.
-  if (typeof pr.stats.gb_qb_pts === "number") {
-    const tdDelta = ((sc.pass_td ?? 4) - 4) * (pr.stats.pass_td ?? 0);
-    return Math.round((pr.stats.gb_qb_pts + tdDelta) * 100) / 100;
-  }
-  return scoreStatLine(pr.stats, sc, p.pos).points;
+  return scoreStatLine(pr.stats, b.league.scoring_settings ?? {}, p.pos).points;
 }
 
 /** Everything needed to decide whether a player has real points yet. */

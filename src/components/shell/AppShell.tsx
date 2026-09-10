@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, Wand2, GitCompare, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
+  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, Wand2, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
 } from "lucide-react";
 import { usePortfolio } from "./PortfolioProvider";
 import { leagueAlerts, sortAlerts } from "@/lib/analysis/alerts";
@@ -20,7 +20,6 @@ const NAV = [
   { href: "/players", label: "Players", icon: Users },
   { href: "/matchups", label: "Matchups", icon: Swords },
   { href: "/rooting", label: "Rooting", icon: Megaphone },
-  { href: "/compare", label: "Compare", icon: GitCompare },
   { href: "/trades", label: "Trades", icon: ArrowLeftRight },
   { href: "/dynasty", label: "Dynasty", icon: Crown, dynastyOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -32,7 +31,7 @@ function isActive(path: string, href: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { portfolio, players, loading, refresh, lastUpdated, error, projSource, goldenBoy } = usePortfolio();
+  const { portfolio, players, loading, refresh, lastUpdated, error } = usePortfolio();
   const [menu, setMenu] = useState(false);
 
   const urgentCount = useMemo(() => {
@@ -92,7 +91,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="ml-auto flex items-center gap-2">
             {error && <span className="hidden md:inline text-[12.5px] text-urgent max-w-[38ch] truncate" title={error}>{error}</span>}
-            {projSource !== "sleeper" && goldenBoy?.count ? <Link href="/settings" className="chip bg-gold/15 text-gold text-[11.5px] hover:bg-gold/25" title="Projection source — change in Settings">{projSource === "blend" ? "Blend" : "Golden Boy"}</Link> : null}
             <button type="button" className="btn text-[13px]" onClick={() => void refresh()} disabled={loading} aria-label="Refresh data">
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
               <span className="hidden sm:inline">{loading ? "Refreshing" : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Refresh"}</span>
