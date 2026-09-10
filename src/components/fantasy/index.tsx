@@ -157,15 +157,16 @@ export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: nu
 /* ---------- Lineup table ---------- */
 
 export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; players: PlayerMap; compact?: boolean }) {
-  const { projections, schedule, odds, liveStats } = usePortfolio();
+  const { projections, schedule, odds, liveStats, goldenBoyTd } = usePortfolio();
   const proj: ProjectionMap = projections?.projections ?? {};
   const g = rosterGroups(b);
   const m = b.matchup;
   const points = (pid: string | null, i: number) => (pid ? actualPoints(pid, b, players, { stats: liveStats, schedule }, m && m.myStarters[i] === pid ? m.myStarterPoints[i] : undefined) ?? undefined : undefined);
   const total = g.starters.reduce((n, s) => n + (s.playerId ? projectPlayer(s.playerId, b, players, proj) ?? 0 : 0), 0);
+  const hasTd = Object.keys(goldenBoyTd).length > 0;
   return (
     <table className="data">
-      <thead><tr><th style={{ width: 56 }}>Slot</th><th>Player</th>{!compact && <th className="hidden md:table-cell">Opp</th>}{!compact && <th className="hidden md:table-cell">Game</th>}{!compact && odds?.configured && <th className="hidden lg:table-cell r" title="Implied team total / game over-under">Vegas</th>}<th className="r">Proj</th><th className="r">Pts</th></tr></thead>
+      <thead><tr><th style={{ width: 56 }}>Slot</th><th>Player</th>{!compact && <th className="hidden md:table-cell">Opp</th>}{!compact && <th className="hidden md:table-cell">Game</th>}{!compact && odds?.configured && <th className="hidden lg:table-cell r" title="Implied team total / game over-under">Vegas</th>}{!compact && hasTd && <th className="hidden sm:table-cell r" title="Anytime-TD probability — Fantasy Golden Boy">TD%</th>}<th className="r">Proj</th><th className="r">Pts</th></tr></thead>
       <tbody>
         {g.starters.map((s, i) => {
           const p = s.playerId ? players[s.playerId] : undefined;
@@ -180,14 +181,14 @@ export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; 
               <td>{s.playerId ? <PlayerCell player={p} id={s.playerId} showHeadshot={!compact} /> : <span className="text-urgent font-medium">Empty slot</span>}</td>
               {!compact && <td className="hidden md:table-cell text-muted">{opp ? (opp.startsWith("@") || opp.startsWith("vs") ? opp : `vs ${opp}`) : kick.tone === "bye" ? <span className="text-faint">BYE</span> : <Unavailable what="—" />}</td>}
               {!compact && <td className={cx("hidden md:table-cell", kick.tone === "live" ? "text-ok font-medium" : kick.tone === "final" ? "text-faint" : kick.tone === "bye" ? "text-warn" : "text-muted")}>{kick.text}</td>}
-              {!compact && odds?.configured && <td className="hidden lg:table-cell r num text-muted">{line?.implied != null ? <>{line.implied}<span className="text-faint"> / {line.total}</span></> : "—"}</td>}
+              {!compact && odds?.configured && <td className="hidden lg:table-cell r num text-muted">{line?.implied != null ? <>{line.implied}<span className="text-faint"> / {line.total}</span></> : "—"}</td>}{!compact && hasTd && <td className="hidden sm:table-cell r num text-muted">{s.playerId && goldenBoyTd[s.playerId] != null ? `${Math.round(goldenBoyTd[s.playerId] * 100)}%` : ""}</td>}
               <td className="r num">{pr != null ? fmtPts(pr) : <span className="text-faint">—</span>}</td>
               <td className="r num font-medium">{pts != null && pts !== 0 ? fmtPts(pts) : <span className="text-faint">—</span>}</td>
             </tr>
           );
         })}
       </tbody>
-      <tfoot><tr><td colSpan={compact ? 2 : odds?.configured ? 5 : 4} className="caption">Projected total</td><td className="r num font-semibold">{fmtPts(total)}</td><td className="r num font-semibold">{m && m.myPoints ? fmtPts(m.myPoints) : <span className="text-faint">—</span>}</td></tr></tfoot>
+      <tfoot><tr><td colSpan={compact ? 2 : 4 + (odds?.configured ? 1 : 0) + (hasTd ? 1 : 0)} className="caption">Projected total</td><td className="r num font-semibold">{fmtPts(total)}</td><td className="r num font-semibold">{m && m.myPoints ? fmtPts(m.myPoints) : <span className="text-faint">—</span>}</td></tr></tfoot>
     </table>
   );
 }
