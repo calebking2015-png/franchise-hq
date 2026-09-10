@@ -7,7 +7,7 @@ import { Ready } from "@/components/fantasy";
 import { Card, EmptyState, PageHeader, PlayerCell, Segmented, StatusBadge, TeamLogo, cx, fmtPts } from "@/components/ui";
 import { rootingInterests, teamRooting, rivalInterests, RIVALS_MIN_WEEK, type RootingInterest, type Side } from "@/lib/analysis/rooting";
 import type { PlayerMap } from "@/lib/sleeper/types";
-import { gameFor, hasStarted } from "@/lib/schedule";
+import { gameFor } from "@/lib/schedule";
 
 const LABEL: Record<Side, string> = { for: "Root for", against: "Root against", neutral: "Neutral" };
 const TONE: Record<Side, string> = { for: "text-ok", against: "text-urgent", neutral: "text-muted" };
@@ -51,14 +51,14 @@ function Row({ r, players, max }: { r: RootingInterest; players: PlayerMap; max:
 }
 
 export default function RootingPage() {
-  const { projections, schedule } = usePortfolio();
+  const { projections, schedule, liveStats } = usePortfolio();
   const [side, setSide] = useState<Side | "rivals">("for");
   const [day, setDay] = useState<string>("all");
   return (
     <Ready>
       {(portfolio, players) => {
         const proj = projections?.projections ?? {};
-        const all = rootingInterests(portfolio, players, proj, (pid) => hasStarted(gameFor(schedule, players[pid]?.team, portfolio.week)));
+        const all = rootingInterests(portfolio, players, proj, { stats: liveStats, schedule });
         const anyLive = all.some((r) => r.live);
         const dayOf = (pid: string) => { const g = gameFor(schedule, players[pid]?.team, portfolio.week); return g?.date ?? null; };
         const days = [...new Set(all.map((r) => dayOf(r.playerId)).filter(Boolean) as string[])].sort();

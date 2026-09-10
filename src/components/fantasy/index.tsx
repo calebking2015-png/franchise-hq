@@ -5,7 +5,7 @@ import { useState } from "react";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import type { Portfolio, LeagueBundle } from "@/lib/portfolio/types";
 import type { PlayerMap, ProjectionMap } from "@/lib/sleeper/types";
-import { projectMatchup, projectPlayer } from "@/lib/projections";
+import { projectMatchup, projectPlayer, actualPoints } from "@/lib/projections";
 import { kickLabel, opponentFor } from "@/lib/schedule";
 import type { Alert } from "@/lib/analysis/alerts";
 import { formatSummary, slotLabel } from "@/lib/league/format";
@@ -116,12 +116,12 @@ export function AlertGroupByLeague({ alerts, players, portfolio }: { alerts: Ale
 /* ---------- League card ---------- */
 
 export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: number }) {
-  const { players, projections } = usePortfolio();
+  const { players, projections, schedule, liveStats } = usePortfolio();
   const me = myTeam(b);
   const opp = opponentTeam(b);
   const m = b.matchup;
-  const live = m && m.oppPoints != null && (m.myPoints > 0 || m.oppPoints > 0);
-  const pm = m ? projectMatchup(b, players, projections?.projections ?? {}) : null;
+  const pm = m ? projectMatchup(b, players, projections?.projections ?? {}, { stats: liveStats, schedule }) : null;
+  const live = !!pm && pm.mine.remaining < (m?.myStarters.filter((id) => id && id !== "0").length ?? 0);
   return (
     <Link href={`/leagues/${b.league.league_id}`} className="card p-4 flex flex-col gap-3 hover:border-line-2 focus-visible:border-gold">
       <div className="flex items-start justify-between gap-3">
@@ -157,11 +157,11 @@ export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: nu
 /* ---------- Lineup table ---------- */
 
 export function LineupTable({ b, players, compact = false }: { b: LeagueBundle; players: PlayerMap; compact?: boolean }) {
-  const { projections, schedule, odds } = usePortfolio();
+  const { projections, schedule, odds, liveStats } = usePortfolio();
   const proj: ProjectionMap = projections?.projections ?? {};
   const g = rosterGroups(b);
   const m = b.matchup;
-  const points = (pid: string | null, i: number) => (m && pid && m.myStarters[i] === pid ? m.myStarterPoints[i] : undefined);
+  const points = (pid: string | null, i: number) => (pid ? actualPoints(pid, b, players, { stats: liveStats, schedule }, m && m.myStarters[i] === pid ? m.myStarterPoints[i] : undefined) ?? undefined : undefined);
   const total = g.starters.reduce((n, s) => n + (s.playerId ? projectPlayer(s.playerId, b, players, proj) ?? 0 : 0), 0);
   return (
     <table className="data">

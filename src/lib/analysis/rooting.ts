@@ -5,7 +5,7 @@
  */
 import type { LeagueBundle, Portfolio } from "@/lib/portfolio/types";
 import type { PlayerMap, ProjectionMap } from "@/lib/sleeper/types";
-import { projectPlayer } from "@/lib/projections";
+import { projectPlayer, actualPoints, type LiveCtx } from "@/lib/projections";
 
 export type Side = "for" | "against" | "neutral";
 
@@ -96,7 +96,7 @@ function myTeamName(b: LeagueBundle) {
  * @param live optional predicate: has this player's game kicked off? When supplied, actual points
  *             replace projections for those players so the list reflects what's really happening.
  */
-export function rootingInterests(p: Portfolio, players: PlayerMap, proj: ProjectionMap, live?: (pid: string) => boolean): RootingInterest[] {
+export function rootingInterests(p: Portfolio, players: PlayerMap, proj: ProjectionMap, live?: LiveCtx): RootingInterest[] {
   const map = new Map<string, RootingInterest>();
   const get = (pid: string) => {
     let r = map.get(pid);
@@ -113,8 +113,8 @@ export function rootingInterests(p: Portfolio, players: PlayerMap, proj: Project
       ids.forEach((pid, i) => {
         if (!pid || pid === "0" || !players[pid]) return;
         const pr = projectPlayer(pid, b, players, proj);
-        const started = live?.(pid) ?? false;
-        const actual = started ? (pts[i] ?? 0) : null;
+        const actual = live ? actualPoints(pid, b, players, live, pts[i]) : null;
+        const started = actual != null;
         const r = get(pid);
         r.leagues.push({ leagueId: b.league.league_id, leagueName: b.league.name, side, proj: pr, actual, team });
         if (side === "for") r.forCount++; else r.againstCount++;

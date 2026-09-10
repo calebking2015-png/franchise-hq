@@ -5,7 +5,7 @@
 import type {
   SleeperUser, SleeperNflState, SleeperLeague, SleeperRoster, SleeperLeagueUser,
   SleeperMatchup, SleeperTradedPick, SleeperTransaction, SleeperTrendingPlayer,
-  SleeperPlayerRaw, Player, PlayerMap, SleeperProjectionRaw, ProjectionMap,
+  SleeperPlayerRaw, Player, PlayerMap, SleeperProjectionRaw, ProjectionMap, StatsMap,
 } from "./types";
 
 const BASE = process.env.SLEEPER_API_BASE ?? "https://api.sleeper.app/v1";
@@ -26,6 +26,7 @@ export const TTL = {
   players: 60 * 60 * 24,
   projections: 60 * 30,
   schedule: 60 * 2,
+  stats: 45,
 } as const;
 
 export class SleeperError extends Error {
@@ -69,6 +70,13 @@ export const sleeper = {
   /** Season schedule with per-game live status (undocumented; lives outside /v1). */
   scheduleRaw: (season: string) =>
     get<import("@/lib/schedule").ScheduleRaw[] | null>(`/schedule/nfl/regular/${season}`, TTL.schedule, ROOT),
+  /** Live weekly stats. Updates in-game well ahead of the matchup feed's starters_points. */
+  statsRaw: (season: string, week: number) =>
+    get<SleeperProjectionRaw[] | null>(
+      `/stats/nfl/${season}/${week}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF`,
+      TTL.stats,
+      ROOT,
+    ),
   /** Weekly stat projections for every fantasy position (Sleeper's in-app numbers, via Rotowire). */
   projectionsRaw: (season: string, week: number) =>
     get<SleeperProjectionRaw[] | null>(
@@ -77,6 +85,16 @@ export const sleeper = {
       ROOT,
     ),
 };
+
+export function trimStats(rows: SleeperProjectionRaw[] | null): StatsMap {
+  const out: StatsMap = {};
+  for (const r of rows ?? []) {
+    const stats: Record<string, number> = {};
+    for (const [k, v] of Object.entries(r.stats ?? {})) if (typeof v === "number") stats[k] = v;
+    if (Object.keys(stats).length) out[r.player_id] = stats;
+  }
+  return out;
+}
 
 /** Keep only players with a real projection and only numeric stat keys (drops ADP fields). */
 export function trimProjections(rows: SleeperProjectionRaw[] | null): ProjectionMap {

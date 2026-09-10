@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Portfolio } from "@/lib/portfolio/types";
-import type { PlayerMap, ProjectionMap, SleeperTrendingPlayer } from "@/lib/sleeper/types";
+import type { PlayerMap, ProjectionMap, SleeperTrendingPlayer, StatsMap } from "@/lib/sleeper/types";
 import type { ScheduleMap } from "@/lib/schedule";
 import type { OddsMap } from "@/lib/odds";
 
@@ -25,6 +25,7 @@ interface Ctx {
   trending: Trending | null;
   projections: Projections | null;
   schedule: ScheduleMap | null;
+  liveStats: StatsMap | null;
   odds: Odds | null;
   loading: boolean;
   error: string | null;
@@ -45,6 +46,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsernameState] = useState<string | null>(null);
   const [recentUsernames, setRecent] = useState<string[]>([]);
   const [schedule, setSchedule] = useState<ScheduleMap | null>(null);
+  const [liveStats, setLiveStats] = useState<StatsMap | null>(null);
   const [odds, setOdds] = useState<Odds | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [players, setPlayers] = useState<PlayerMap>({});
@@ -91,6 +93,10 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
       getJson<{ schedule: ScheduleMap }>(`/api/sleeper/schedule?season=${encodeURIComponent(p.season)}`)
         .then((r) => setSchedule(r.schedule))
         .catch(() => setSchedule((prev) => prev));
+      // Live stats feed: the matchup feed's per-player points lag several minutes behind this.
+      getJson<{ stats: StatsMap }>(`/api/sleeper/stats?season=${encodeURIComponent(p.season)}&week=${p.week}`)
+        .then((r) => setLiveStats(r.stats))
+        .catch(() => setLiveStats((prev) => prev));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -128,8 +134,8 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<Ctx>(
-    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, schedule, odds, loading, error, refresh, lastUpdated }),
-    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, schedule, odds, loading, error, refresh, lastUpdated],
+    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, schedule, liveStats, odds, loading, error, refresh, lastUpdated }),
+    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, schedule, liveStats, odds, loading, error, refresh, lastUpdated],
   );
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

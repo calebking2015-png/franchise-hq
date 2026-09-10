@@ -160,6 +160,8 @@ export interface Projection {
   stats: Record<string, number>;
 }
 export type ProjectionMap = Record<string, Projection>;
+/** Live/actual weekly stat lines keyed by player id — same Sleeper stat keys as projections. */
+export type StatsMap = Record<string, Record<string, number>>;
 
 export type InjuryStatus =
   | "Questionable" | "Doubtful" | "Out" | "IR" | "PUP" | "Sus" | "COV" | "NA" | "DNR" | string;
