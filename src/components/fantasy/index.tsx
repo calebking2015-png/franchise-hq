@@ -144,7 +144,7 @@ export function LeagueCard({ b, alertCount }: { b: LeagueBundle; alertCount?: nu
         {m ? (
           <>
             <span className="truncate">{live ? <span className="num font-semibold text-[16px]">{fmtPts(m.myPoints)}</span> : <span className="text-muted">Week {b.week}</span>} <span className="text-muted">vs</span> {opp?.teamName ?? "TBD"}</span>
-            {live ? <span className="num font-semibold text-[16px]">{fmtPts(m.oppPoints)}</span> : pm?.opp ? <span className={cx("num text-[13px]", pm.margin! > 0 ? "text-ok" : pm.margin! < 0 ? "text-urgent" : "text-muted")}>proj {fmtPts(pm.mine.total)}–{fmtPts(pm.opp.total)}</span> : <Unavailable what="No projection" />}
+            {live ? <span className="num font-semibold text-[16px]">{fmtPts(m.oppPoints)}</span> : pm?.opp ? <span className={cx("num text-[13px]", pm.margin! > 0 ? "text-ok" : pm.margin! < 0 ? "text-urgent" : "text-muted")}>proj {fmtPts(pm.mine.total)}–{fmtPts(pm.opp.total)}</span> : <Unavailable what="No projection" />}{live && pm?.opp && <div className={cx("caption num", pm.margin! > 0 ? "text-ok" : pm.margin! < 0 ? "text-urgent" : "")}>proj final {fmtPts(pm.mine.total)}–{fmtPts(pm.opp.total)}</div>}
           </>
         ) : (
           <span className="text-muted">{b.league.status === "pre_draft" ? "Not yet drafted" : "No matchup this week"}</span>

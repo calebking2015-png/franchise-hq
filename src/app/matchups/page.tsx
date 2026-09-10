@@ -53,9 +53,9 @@ export default function MatchupsPage() {
                         <Link key={b.league.league_id} href={`/leagues/${b.league.league_id}`} className="card p-4 hover:border-line-2 grid gap-3">
                           <div className="flex items-center justify-between gap-2"><span className="h3 truncate">{b.league.name}</span><LeagueKindChip kind={b.format.kind} /></div>
                           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                            <div className="min-w-0"><div className="truncate font-medium">{me?.teamName ?? "Me"}</div><div className="caption">{me ? recordStr(me.record) : ""}</div><div className="num text-[28px] font-semibold">{pm ? fmtPts(pm.mine.total) : fmtPts(m.myPoints)}</div>{isLive && pm && <div className="caption num">live · {pm.mine.remaining} still to play</div>}</div>
+                            <div className="min-w-0"><div className="truncate font-medium">{me?.teamName ?? "Me"}</div><div className="caption">{me ? recordStr(me.record) : ""}</div><div className="num text-[28px] font-semibold">{isLive ? fmtPts(m.myPoints) : pm ? fmtPts(pm.mine.total) : "—"}</div>{isLive && pm && <div className="caption num">proj final {fmtPts(pm.mine.total)} · {pm.mine.remaining} to play</div>}{!isLive && pm && <div className="caption">projected</div>}</div>
                             <div className="text-muted text-[12px]">vs</div>
-                            <div className="min-w-0 text-right"><div className="truncate font-medium">{opp?.teamName ?? "TBD"}</div><div className="caption">{opp ? recordStr(opp.record) : ""}</div><div className="num text-[28px] font-semibold">{pm?.opp ? fmtPts(pm.opp.total) : fmtPts(m.oppPoints)}</div>{isLive && pm?.opp && <div className="caption num">live · {pm.opp.remaining} still to play</div>}</div>
+                            <div className="min-w-0 text-right"><div className="truncate font-medium">{opp?.teamName ?? "TBD"}</div><div className="caption">{opp ? recordStr(opp.record) : ""}</div><div className="num text-[28px] font-semibold">{isLive ? fmtPts(m.oppPoints) : pm?.opp ? fmtPts(pm.opp.total) : "—"}</div>{isLive && pm?.opp && <div className="caption num">proj final {fmtPts(pm.opp.total)} · {pm.opp.remaining} to play</div>}{!isLive && pm?.opp && <div className="caption">projected</div>}</div>
                           </div>
                           <div className="flex items-center justify-between caption border-t border-line pt-2">
                             <span>{pm ? `${pm.mine.remaining} to play` : ""}{pm && pm.mine.missing > 0 ? ` · ${pm.mine.missing} no proj` : ""}</span>
@@ -69,7 +69,7 @@ export default function MatchupsPage() {
                 </section>
               ))}
             </div>
-            <p className="caption mt-4">Big number is actual points for players who have played plus projections for those who haven't, so it's the projected final all week long. &quot;No proj&quot; counts starters Sleeper has no projection for (bye week, inactive, empty slot) — those contribute zero to the total.</p>
+            <p className="caption mt-4">Once a matchup has points, the big number is the live score (same as Sleeper) and the projected final — actuals so far plus projections for who's left — sits underneath. Before kickoff the big number is the projection. Grouping uses the projected final. &quot;No proj&quot; counts starters Sleeper has no projection for (bye week, inactive, empty slot) — those contribute zero to the total.</p>
           </>
         );
       }}
