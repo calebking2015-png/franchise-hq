@@ -62,9 +62,10 @@ export default function ComparePage() {
               <StatTile label="Sleeper higher" value={smaller} sub="by 3+ points" tone="urgent" />
               <StatTile label="Avg. gap" value={fmtPts(mad)} sub="mean absolute difference" tone="gold" />
             </div>
-            <Card pad={false}>
+            {/* Wide screens: full table. */}
+            <Card pad={false} className="hidden sm:block">
               <table className="tbl">
-                <thead><tr><th>Player</th><th className="hidden md:table-cell">Where</th><th className="r">Sleeper</th><th className="r">Golden Boy</th><th className="r">Diff</th><th className="r hidden sm:table-cell" title="Golden Boy anytime-TD probability">TD%</th></tr></thead>
+                <thead><tr><th>Player</th><th className="hidden md:table-cell">Where</th><th className="r">Sleeper</th><th className="r">Golden&nbsp;Boy</th><th className="r">Diff</th><th className="r" title="Golden Boy anytime-TD probability">TD%</th></tr></thead>
                 <tbody>
                   {rows.slice(0, 150).map((r) => (
                     <tr key={r.playerId}>
@@ -73,12 +74,30 @@ export default function ComparePage() {
                       <td className="r num">{r.sleeper != null ? fmtPts(r.sleeper) : <span className="text-faint">—</span>}</td>
                       <td className="r num">{r.gb != null ? fmtPts(r.gb) : <span className="text-faint">—</span>}</td>
                       <td className={cx("r num font-semibold", r.sleeper == null || r.gb == null ? "text-faint" : r.diff >= 3 ? "text-ok" : r.diff <= -3 ? "text-urgent" : "text-muted")}>{r.sleeper != null && r.gb != null ? `${r.diff > 0 ? "+" : ""}${fmtPts(r.diff)}` : "—"}</td>
-                      <td className="r num hidden sm:table-cell text-muted">{r.tdPct != null ? `${Math.round(r.tdPct * 100)}%` : ""}</td>
+                      <td className="r num text-muted">{r.tdPct != null ? `${Math.round(r.tdPct * 100)}%` : ""}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </Card>
+
+            {/* Phones: one card per player, numbers on their own row so nothing gets cut off. */}
+            <div className="sm:hidden grid gap-2">
+              {rows.slice(0, 150).map((r) => (
+                <Card key={r.playerId} pad={false} className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <PlayerCell player={players[r.playerId]} id={r.playerId} showHeadshot={false} />
+                    <span className={cx("num text-[19px] font-semibold shrink-0", r.sleeper == null || r.gb == null ? "text-faint" : r.diff >= 3 ? "text-ok" : r.diff <= -3 ? "text-urgent" : "text-muted")}>{r.sleeper != null && r.gb != null ? `${r.diff > 0 ? "+" : ""}${fmtPts(r.diff)}` : "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-4 mt-2 pt-2 border-t border-line text-[13px]">
+                    <span className="caption">Sleeper <span className="num text-ink ml-0.5">{r.sleeper != null ? fmtPts(r.sleeper) : "—"}</span></span>
+                    <span className="caption">Golden Boy <span className="num text-ink ml-0.5">{r.gb != null ? fmtPts(r.gb) : "—"}</span></span>
+                    {r.tdPct != null && <span className="caption ml-auto">TD% <span className="num text-ink ml-0.5">{Math.round(r.tdPct * 100)}%</span></span>}
+                  </div>
+                  {r.leagues.length > 0 && <div className="flex flex-wrap gap-1 mt-2">{r.leagues.map(({ b, starting }) => <Link key={b.league.league_id} href={`/leagues/${b.league.league_id}`} className={cx("chip text-[11px]", starting ? "bg-ok/12 text-ok" : "chip-outline text-muted")}>{b.league.name}</Link>)}</div>}
+                </Card>
+              ))}
+            </div>
             <p className="caption mt-4">Projections courtesy of <a href={goldenBoy.url} target="_blank" rel="noreferrer" className="text-gold hover:underline">Fantasy Golden Boy</a>, used with permission. RB/WR/TE are rebuilt from his stat lines and scored under each league&apos;s settings, so they&apos;re exact in every format; QBs use his headline number (adjusted for 6-pt pass-TD leagues); K and DEF come from Sleeper. TD% is his anytime-touchdown probability.</p>
           </>
         );
