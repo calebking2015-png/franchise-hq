@@ -70,6 +70,13 @@ export const sleeper = {
   /** Season schedule with per-game live status (undocumented; lives outside /v1). */
   scheduleRaw: (season: string) =>
     get<import("@/lib/schedule").ScheduleRaw[] | null>(`/schedule/nfl/regular/${season}`, TTL.schedule, ROOT),
+  /** One week of actual stats. */
+  weekStatsRaw: (season: string, week: number) =>
+    get<SleeperProjectionRaw[] | null>(
+      `/stats/nfl/${season}/${week}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE`,
+      TTL.stats,
+      ROOT,
+    ),
   /** Live weekly stats. Updates in-game well ahead of the matchup feed's starters_points. */
   statsRaw: (season: string, week: number) =>
     get<SleeperProjectionRaw[] | null>(

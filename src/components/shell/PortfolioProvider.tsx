@@ -37,6 +37,8 @@ interface Ctx {
   setProjSource: (s: ProjSource) => void;
   schedule: ScheduleMap | null;
   liveStats: StatsMap | null;
+  /** week → actual stats, weeks 1..current, for trend analysis. */
+  seasonStats: Record<number, StatsMap> | null;
   odds: Odds | null;
   loading: boolean;
   error: string | null;
@@ -58,6 +60,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const [recentUsernames, setRecent] = useState<string[]>([]);
   const [schedule, setSchedule] = useState<ScheduleMap | null>(null);
   const [liveStats, setLiveStats] = useState<StatsMap | null>(null);
+  const [seasonStats, setSeasonStats] = useState<Record<number, StatsMap> | null>(null);
   const [odds, setOdds] = useState<Odds | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [players, setPlayers] = useState<PlayerMap>({});
@@ -114,6 +117,9 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
       getJson<{ stats: StatsMap }>(`/api/sleeper/stats?season=${encodeURIComponent(p.season)}&week=${p.week}`)
         .then((r) => setLiveStats(r.stats))
         .catch(() => setLiveStats((prev) => prev));
+      getJson<{ weekly: Record<number, StatsMap> }>(`/api/sleeper/season?season=${encodeURIComponent(p.season)}&through=${p.week}`)
+        .then((r) => setSeasonStats(r.weekly))
+        .catch(() => setSeasonStats((prev) => prev));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -180,8 +186,8 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   }, [goldenBoy]);
 
   const value = useMemo<Ctx>(
-    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, odds, loading, error, refresh, lastUpdated }),
-    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, odds, loading, error, refresh, lastUpdated],
+    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, seasonStats, odds, loading, error, refresh, lastUpdated }),
+    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, seasonStats, odds, loading, error, refresh, lastUpdated],
   );
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;
