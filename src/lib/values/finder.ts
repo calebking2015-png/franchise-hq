@@ -99,24 +99,37 @@ export function findTrades(b: LeagueBundle, players: PlayerMap, values: ValueMap
         .sort((a, c) => c.v - a.v);
 
       for (const tgt of targets.slice(0, 2)) {
-        // Pay with surplus first (prefer a different position so I don't re-open the same hole),
-        // then top up with my weakest starter at this pos if needed.
-        const pool = [...surplus].sort((a, c) => c.value - a.value);
-        const give: { id: string; value: number }[] = [];
-        let giveVal = 0;
-        for (const s of pool) {
-          if (giveVal >= tgt.v * 0.9) break;
-          if (myStarters.has(s.id)) continue;
-          give.push({ id: s.id, value: s.value }); giveVal += s.value;
+        // Build a realistic package for ONE target: prefer a single fair piece, allow at most two.
+        // Never pile on scrubs — each piece must be a real chip, and we cap the count.
+        const MAX_PIECES = 2;
+        const minPiece = tgt.v * 0.2; // a piece worth <20% of the target is filler; skip it
+        // Candidate givables: bench surplus (any pos) + the weakest starter being replaced.
+        const givables = [
+          ...surplus.filter((sp) => !myStarters.has(sp.id)).map((sp) => ({ id: sp.id, value: sp.value })),
+          ...(n.weakestStarterId ? [{ id: n.weakestStarterId, value: n.weakestStarterValue }] : []),
+        ].filter((g) => g.value >= minPiece).sort((a, c) => c.value - a.value);
+        if (givables.length === 0) continue;
+
+        // Try best single piece first (1-for-1), then best fair pair (2-for-1).
+        let give: { id: string; value: number }[] | null = null;
+        const within = (v: number) => Math.abs((tgt.v - v) / Math.max(tgt.v, v, 1)) <= 0.15;
+        const single = givables.find((g) => within(g.value));
+        if (single) give = [single];
+        if (!give) {
+          let best: { pair: { id: string; value: number }[]; d: number } | null = null;
+          for (let i = 0; i < givables.length; i++) for (let j = i + 1; j < givables.length; j++) {
+            const v = givables[i].value + givables[j].value;
+            if (!within(v)) continue;
+            const d = Math.abs(tgt.v - v);
+            if (!best || d < best.d) best = { pair: [givables[i], givables[j]], d };
+          }
+          if (best) give = best.pair;
         }
-        // If surplus alone can't get within range, allow adding the weakest starter being replaced.
-        if (giveVal < tgt.v * 0.88 && n.weakestStarterId && !give.find((g) => g.id === n.weakestStarterId)) {
-          give.push({ id: n.weakestStarterId, value: n.weakestStarterValue }); giveVal += n.weakestStarterValue;
-        }
-        if (give.length === 0) continue;
+        if (!give || give.length > MAX_PIECES) continue;
+        const giveVal = give.reduce((acc, g) => acc + g.value, 0);
         const larger = Math.max(giveVal, tgt.v, 1);
         const pct = Math.round(((tgt.v - giveVal) / larger) * 100);
-        if (Math.abs(pct) > 15) continue; // keep it plausibly acceptable to both sides
+        if (Math.abs(pct) > 15) continue;
         const usedSurplusOnly = !give.find((g) => g.id === n.weakestStarterId);
         const upgradeGain = Math.round(tgt.v - n.weakestStarterValue);
         ideas.push({
