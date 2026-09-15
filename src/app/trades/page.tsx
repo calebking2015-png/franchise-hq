@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Ready } from "@/components/fantasy";
-import { Card, EmptyState, PageHeader, PlayerCell, PositionBadge, Segmented, StatTile, cx, fmtPts } from "@/components/ui";
+import { Card, EmptyState, PageHeader, PlayerCell, PlayerLink, PositionBadge, Segmented, StatTile, cx, fmtPts } from "@/components/ui";
 import { positionalDepth } from "@/lib/analysis/exposure";
 import { buildTrends, type Trend, type Verdict } from "@/lib/analysis/trends";
 import { fcKey, evalTrade, leagueTeamValues, type ValueMap } from "@/lib/values";
+import { findTrades, balanceTrade } from "@/lib/values/finder";
 import type { LeagueBundle } from "@/lib/portfolio/types";
 import { SearchInput } from "@/components/ui";
 import type { PlayerMap } from "@/lib/sleeper/types";
@@ -90,6 +91,17 @@ function TradeEvaluator({ portfolio, players, values }: { portfolio: ReturnType<
               </div>
             </div>
 
+            {(give.length > 0 || get.length > 0) && (() => {
+              const bal = !b.format.isDynasty && give.length && get.length ? balanceTrade(give, get, vmap, { mine: myIds, theirs: otherIds }, players) : null;
+              return bal && bal.suggestions.length ? (
+                <div className="mt-3 rounded-lg px-4 py-2.5 bg-surface-2">
+                  <div className="caption mb-1">To even it out, add to <span className="text-ink">{bal.addTo === "give" ? "your side" : "their side"}</span>:</div>
+                  <div className="flex flex-wrap gap-1.5">{bal.suggestions.map((sug) => (
+                    <button key={sug.id} type="button" onClick={() => (bal.addTo === "give" ? setGive([...give, sug.id]) : setGet([...get, sug.id]))} className="chip chip-outline hover:border-gold flex items-center gap-1.5">{players[sug.id]?.name}<span className="num caption">{sug.value.toLocaleString()}</span><span className="text-gold">+</span></button>
+                  ))}</div>
+                </div>
+              ) : null;
+            })()}
             {(give.length > 0 || get.length > 0) && (
               <div className={cx("mt-4 rounded-lg px-4 py-3 flex items-center justify-between", ev.verdict === "fair" ? "bg-surface-2" : ev.verdict === "you win" ? "bg-ok/12" : "bg-urgent/12")}>
                 <div>
@@ -110,6 +122,42 @@ function TradeEvaluator({ portfolio, players, values }: { portfolio: ReturnType<
       </div>
       <p className="caption px-4 pb-3">Values from <a href="https://fantasycalc.com" target="_blank" rel="noreferrer" className="text-gold hover:underline">FantasyCalc</a>, matched to this league&apos;s format ({b.format.isDynasty ? "dynasty" : "redraft"} · {b.format.superflex ? "SF" : "1QB"} · {b.format.scoring}). A fair-value gut check, not a projection of who&apos;ll play better.</p>
     </Card>
+  );
+}
+
+function TradeFinder({ portfolio, players, values }: { portfolio: NonNullable<ReturnType<typeof usePortfolio>["portfolio"]>; players: PlayerMap; values: Record<string, ValueMap> }) {
+  const redraft = portfolio.leagues.filter((b) => !b.format.isDynasty);
+  if (redraft.length === 0) return <EmptyState title="Redraft only" detail="The trade finder targets win-now value, so it runs on your redraft leagues. You don't have any this season." />;
+  const ideasByLeague = redraft.map((b) => ({ b, ideas: findTrades(b, players, values[fcKey(b.format)] ?? {}) }));
+  const anyValues = redraft.some((b) => Object.keys(values[fcKey(b.format)] ?? {}).length > 0);
+  if (!anyValues) return <EmptyState title="Values loading…" detail="FantasyCalc redraft values haven't loaded yet — give it a moment and refresh." />;
+  const total = ideasByLeague.reduce((n, x) => n + x.ideas.length, 0);
+  if (total === 0) return <EmptyState title="No clear upgrades right now" detail="Nothing surfaced that upgrades a starting spot while staying fair by value. Your rosters are balanced, or there's no obvious trade partner. Check back as rosters shift." />;
+  return (
+    <div className="grid gap-4">
+      <p className="caption">Fair-ish redraft deals that upgrade one of your starting spots — either filling a thin position or cashing bench depth into an upgrade. Candidates to explore, not instructions: they weigh value and roster fit, not your read on a matchup. Open the Evaluate tab to tweak any of them.</p>
+      {ideasByLeague.filter((x) => x.ideas.length).map(({ b, ideas }) => (
+        <Card key={b.league.league_id} pad={false} title={b.league.name} actions={<span className="caption">{ideas.length} idea{ideas.length === 1 ? "" : "s"}</span>}>
+          <div className="divide-y divide-line">
+            {ideas.map((idea, i) => (
+              <div key={i} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={cx("chip text-[11px]", idea.kind === "fill-need" ? "bg-info/12 text-info" : "bg-ok/12 text-ok")}>{idea.kind === "fill-need" ? `Upgrade ${idea.upgradePos}` : `Cash ${idea.upgradePos} depth`}</span>
+                  <span className="caption">vs {idea.partnerName} · {idea.pct > 0 ? "+" : ""}{idea.pct}% value</span>
+                </div>
+                <div className="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-2 mt-2">
+                  <div><div className="caption">You give ({idea.giveValue.toLocaleString()})</div>{idea.give.map((g) => <div key={g.id} className="text-[13.5px]"><PlayerLink player={players[g.id]} /></div>)}</div>
+                  <span className="text-muted hidden sm:block">→</span>
+                  <div className="sm:text-right"><div className="caption">You get ({idea.getValue.toLocaleString()})</div>{idea.get.map((g) => <div key={g.id} className="text-[13.5px] font-medium"><PlayerLink player={players[g.id]} /></div>)}</div>
+                </div>
+                <p className="caption mt-1.5">{idea.rationale}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ))}
+      <p className="caption">Values from <a href="https://fantasycalc.com" target="_blank" rel="noreferrer" className="text-gold hover:underline">FantasyCalc</a> (redraft). A fair value that fills a need isn&apos;t automatically the right move — check the matchup and who you actually rate before you send it.</p>
+    </div>
   );
 }
 
@@ -147,7 +195,7 @@ function TeamValueView({ portfolio, players, values }: { portfolio: NonNullable<
 
 export default function TradesPage() {
   const { projections, goldenBoyTd, seasonStats, values } = usePortfolio();
-  const [tab, setTab] = useState<Verdict | "depth" | "evaluate" | "value">("buy-low");
+  const [tab, setTab] = useState<Verdict | "depth" | "evaluate" | "value" | "find">("buy-low");
   return (
     <Ready>
       {(portfolio, players) => {
@@ -169,7 +217,7 @@ export default function TradesPage() {
           <>
             <PageHeader title="Trade targets"
               sub={<>Buy-low / sell-high reads on the players you roster, from actual points vs. projection and how sustainable the scoring is (volume vs. touchdown luck). {noGames ? "No games have been played yet this season — check back after Week 1 kicks off." : lowConf ? <span className="text-warn">Only {throughWeek} week{throughWeek === 1 ? "" : "s"} in — treat these as early signals, not verdicts. They firm up around Week 4.</span> : "Confidence rises with sample size; the dots show how many games back each call."}</>}
-              actions={<Segmented value={tab} onChange={setTab} options={[{ value: "buy-low", label: "Buy low", count: buy.length }, { value: "sell-high", label: "Sell high", count: sell.length }, { value: "hold", label: "Hold", count: hold.length }, { value: "evaluate", label: "Evaluate" }, { value: "value", label: "Team value" }, { value: "depth", label: "Depth" }]} />} />
+              actions={<Segmented value={tab} onChange={setTab} options={[{ value: "buy-low", label: "Buy low", count: buy.length }, { value: "sell-high", label: "Sell high", count: sell.length }, { value: "hold", label: "Hold", count: hold.length }, { value: "find", label: "Find trades" }, { value: "evaluate", label: "Evaluate" }, { value: "value", label: "Team value" }, { value: "depth", label: "Depth" }]} />} />
 
             {!noGames && tab !== "depth" && (
               <div className="grid grid-cols-3 gap-3 mb-5">
@@ -179,7 +227,9 @@ export default function TradesPage() {
               </div>
             )}
 
-            {tab === "value" ? (
+            {tab === "find" ? (
+              <TradeFinder portfolio={portfolio} players={players} values={values} />
+            ) : tab === "value" ? (
               <TeamValueView portfolio={portfolio} players={players} values={values} />
             ) : tab === "evaluate" ? (
               <TradeEvaluator portfolio={portfolio} players={players} values={values} />
