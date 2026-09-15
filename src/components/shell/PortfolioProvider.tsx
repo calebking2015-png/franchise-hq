@@ -5,6 +5,7 @@ import type { Portfolio } from "@/lib/portfolio/types";
 import type { PlayerMap, ProjectionMap, SleeperTrendingPlayer, StatsMap } from "@/lib/sleeper/types";
 import type { ScheduleMap } from "@/lib/schedule";
 import type { OddsMap } from "@/lib/odds";
+import { fcKey, fcParams, type ValueMap } from "@/lib/values";
 
 const LS_USER = "fhq.username";
 const LS_RECENT = "fhq.recent";
@@ -39,6 +40,8 @@ interface Ctx {
   liveStats: StatsMap | null;
   /** week → actual stats, weeks 1..current, for trend analysis. */
   seasonStats: Record<number, StatsMap> | null;
+  /** Trade values keyed by format key (fcKey), each a map of Sleeper id → value. */
+  values: Record<string, ValueMap>;
   odds: Odds | null;
   loading: boolean;
   error: string | null;
@@ -61,6 +64,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const [schedule, setSchedule] = useState<ScheduleMap | null>(null);
   const [liveStats, setLiveStats] = useState<StatsMap | null>(null);
   const [seasonStats, setSeasonStats] = useState<Record<number, StatsMap> | null>(null);
+  const [values, setValues] = useState<Record<string, ValueMap>>({});
   const [odds, setOdds] = useState<Odds | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [players, setPlayers] = useState<PlayerMap>({});
@@ -120,6 +124,17 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
       getJson<{ weekly: Record<number, StatsMap> }>(`/api/sleeper/season?season=${encodeURIComponent(p.season)}&through=${p.week}`)
         .then((r) => setSeasonStats(r.weekly))
         .catch(() => setSeasonStats((prev) => prev));
+      // Trade values: fetch once per distinct league format (FantasyCalc buckets by dynasty/qbs/teams/ppr).
+      const seen = new Set<string>();
+      for (const b of p.leagues) {
+        const key = fcKey(b.format);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const q = fcParams(b.format);
+        getJson<{ values: ValueMap }>(`/api/values?isDynasty=${q.isDynasty}&numQbs=${q.numQbs}&numTeams=${q.numTeams}&ppr=${q.ppr}`)
+          .then((r) => setValues((prev) => ({ ...prev, [key]: r.values })))
+          .catch(() => {});
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -186,8 +201,8 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   }, [goldenBoy]);
 
   const value = useMemo<Ctx>(
-    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, seasonStats, odds, loading, error, refresh, lastUpdated }),
-    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, seasonStats, odds, loading, error, refresh, lastUpdated],
+    () => ({ username, setUsername, recentUsernames, portfolio, players: merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, seasonStats, values, odds, loading, error, refresh, lastUpdated }),
+    [username, setUsername, recentUsernames, portfolio, merged, playersLoaded, trending, projections, sleeperProjections, goldenBoy, goldenBoyTd, projSource, setProjSource, schedule, liveStats, seasonStats, values, odds, loading, error, refresh, lastUpdated],
   );
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

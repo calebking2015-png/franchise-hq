@@ -28,6 +28,8 @@ Production: `npm run build && npm start`. Deploys to Netlify (Next.js runtime) o
 - **Rivals** tab in Rooting (from week 4): starters on teams within a game of you in the standings
 - **Vegas** (optional) — set `ODDS_API_KEY` for implied team totals on Lineups and Moves
 - **Golden Boy** — second projection source (fantasygoldenboy.com, used with permission): two published Google Sheets parsed into Sleeper-style stat lines and scored per league; Settings toggle Sleeper / Golden Boy / Blend; Compare page ranks disagreements; K/DEF and unprojected players fall back to Sleeper
+- **Team value** — every team in a league ranked by total FantasyCalc roster value (starters vs bench, top pieces), your rank highlighted; computed locally from Sleeper rosters, no FantasyCalc account linked
+- **Trade evaluator** — FantasyCalc trade values matched to each league's exact format (dynasty/redraft, 1QB/SF, PPR/Half); pick a league, build both sides from real rosters, get a fair/win/lose verdict (within 10% = fair). Values also shown on Trade Target rows.
 - **Trade targets** — buy-low / sell-high / hold reads on players you roster, from actual points vs. projection and sustainability (volume vs. TD luck); confidence scales with games played (soft signals early, firmer by ~Week 4); Golden Boy TD% feeds the sustainability check. Depth view retained. No fair-value math yet (needs a trade-value source).
 - **Moves** — start/sit swaps (exact lineup optimizer over each league's slots) and waiver pickups that raise the projected lineup, with a suggested drop
 - **Rooting** — Root for / Root against / Neutral: every player starting for or against you this week, weighted by projected points, rolled up to NFL teams
