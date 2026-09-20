@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, Wand2, GitCompare, ScrollText, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
+  LayoutDashboard, Trophy, ListChecks, Radar, PieChart, Users, Swords, Megaphone, Wand2, GitCompare, ArrowLeftRight, Crown, Settings, RefreshCw, Menu, X,
 } from "lucide-react";
 import { usePortfolio } from "./PortfolioProvider";
 import { leagueAlerts, sortAlerts } from "@/lib/analysis/alerts";
@@ -21,7 +21,6 @@ const NAV = [
   { href: "/matchups", label: "Matchups", icon: Swords },
   { href: "/rooting", label: "Rooting", icon: Megaphone },
   { href: "/compare", label: "Compare", icon: GitCompare },
-  { href: "/recaps", label: "Recaps", icon: ScrollText },
   { href: "/trades", label: "Trades", icon: ArrowLeftRight },
   { href: "/dynasty", label: "Dynasty", icon: Crown, dynastyOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },

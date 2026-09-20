@@ -67,8 +67,6 @@ export const sleeper = {
   trendingDrops: (hours = 24, limit = 50) =>
     get<SleeperTrendingPlayer[]>(`/players/nfl/trending/drop?lookback_hours=${hours}&limit=${limit}`, TTL.trending),
   playersRaw: () => get<Record<string, SleeperPlayerRaw>>("/players/nfl", TTL.players),
-  /** Playoff brackets — used to find the champion of a completed season. */
-  winnersBracket: (leagueId: string) => get<{ r: number; m: number; t1: number | null; t2: number | null; w: number | null; l: number | null; p?: number }[] | null>(`/league/${leagueId}/winners_bracket`, TTL.tradedPicks),
   /** Season schedule with per-game live status (undocumented; lives outside /v1). */
   scheduleRaw: (season: string) =>
     get<import("@/lib/schedule").ScheduleRaw[] | null>(`/schedule/nfl/regular/${season}`, TTL.schedule, ROOT),

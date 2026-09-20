@@ -23,7 +23,6 @@ Production: `npm run build && npm start`. Deploys to Netlify (Next.js runtime) o
 - **Portfolio** — player exposure, NFL team exposure, position totals, concentration + injury warnings
 - **Players** — search, universal player page with owned / available / owned-by-others per league
 - **Matchups** — projected totals and margin per league (Sleeper/Rotowire projections scored under each league's settings), live scores replace projections as games finish
-- **Recaps** — season-by-season league history (walks Sleeper's previous_league_id chain back through every year: champions from the playoff bracket, final standings, points titles, schedule-luck notes) and weekly writeups for the current season (high/low, biggest blowout, closest game), phrased into readable narrative from verified records
 - **First visit** asks for a Sleeper username (saved in the browser); Settings has a recent-usernames switcher, so friends can use the same deployment
 - **Schedule** — game day + live status per team from Sleeper; lineups show Game column, byes, and Moves never suggests a player whose game has kicked off (Sunday mode is automatic)
 - **Byes** — Command Center lists next week's bye-week starters per league
