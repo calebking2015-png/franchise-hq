@@ -67,6 +67,19 @@ export async function buildLeagueBundle(league: SleeperLeague, userId: string, w
   const ownership: Record<string, number> = {};
   for (const ro of r) for (const pid of ro.players ?? []) ownership[pid] = ro.roster_id;
 
+  // Sleeper's /rosters starters can lag a lineup change by many minutes, while /matchups reflects it
+  // almost immediately. When they disagree for the current week, trust the matchup — it's what the
+  // user actually has set — so start/sit suggestions don't nag about a move already made.
+  if (matchups) {
+    const byRoster = new Map(matchups.map((m) => [m.roster_id, m.starters]));
+    for (const ro of r) {
+      const fresh = byRoster.get(ro.roster_id);
+      if (fresh && fresh.length && JSON.stringify(fresh) !== JSON.stringify(ro.starters)) {
+        ro.starters = fresh;
+      }
+    }
+  }
+
   return {
     league,
     format: deriveFormat(league),

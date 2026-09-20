@@ -18,10 +18,12 @@ Production: `npm run build && npm start`. Deploys to Netlify (Next.js runtime) o
 - **Command Center** — portfolio stats, Needs Attention (empty slots, OUT/IR/SUS starters, IR housekeeping, Doubtful/Questionable), watch list, waiver radar, league cards
 - **Leagues / League Hub** — roster, live matchup, standings, trending adds available, transactions, traded picks (dynasty), roster + scoring settings
 - **Lineups** — every starting lineup with bench/IR/taxi and flags
+- **Waiver pickup board** — per-league ranked free agents blending this-week projection, FantasyCalc rest-of-season value, Sleeper trending adds and your positional need, tiered priority/solid/speculative/stash with a suggested drop; FAAB shown as a % -of-remaining-budget range by tier (a guideline, never a fake-precise bid). K/DEF capped as streamers. Original trending/drops views retained.
 - **Waivers** — Sleeper trending adds × availability in each league × your positional depth; drops you own
 - **Portfolio** — player exposure, NFL team exposure, position totals, concentration + injury warnings
 - **Players** — search, universal player page with owned / available / owned-by-others per league
 - **Matchups** — projected totals and margin per league (Sleeper/Rotowire projections scored under each league's settings), live scores replace projections as games finish
+- **Recaps** — season-by-season league history (walks Sleeper's previous_league_id chain back through every year: champions from the playoff bracket, final standings, points titles, schedule-luck notes) and weekly writeups for the current season (high/low, biggest blowout, closest game), phrased into readable narrative from verified records
 - **First visit** asks for a Sleeper username (saved in the browser); Settings has a recent-usernames switcher, so friends can use the same deployment
 - **Schedule** — game day + live status per team from Sleeper; lineups show Game column, byes, and Moves never suggests a player whose game has kicked off (Sunday mode is automatic)
 - **Byes** — Command Center lists next week's bye-week starters per league
