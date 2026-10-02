@@ -28,7 +28,7 @@ export default function SettingsPage() {
 
         <Card title="Data & refresh">
           <div className="flex items-center justify-between gap-3">
-            <div><div className="text-[13.5px]">Leagues, rosters and matchups refresh every 3 minutes while the tab is visible.</div><div className="caption">Last updated {lastUpdated ? lastUpdated.toLocaleTimeString() : "—"}. Player database is cached for 24h on the server.</div></div>
+            <div><div className="text-[13.5px]">Leagues, rosters and matchups refresh every minute while the tab is visible, and instantly when you switch back to the tab.</div><div className="caption">Last updated {lastUpdated ? lastUpdated.toLocaleTimeString() : "—"}. Player database is cached for 24h on the server.</div></div>
             <button type="button" className="btn" onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing…" : "Refresh now"}</button>
           </div>
         </Card>

@@ -10,7 +10,7 @@ import { fcKey, fcParams, type ValueMap } from "@/lib/values";
 const LS_USER = "fhq.username";
 const LS_RECENT = "fhq.recent";
 const LS_SOURCE = "fhq.projSource";
-const REFRESH_MS = 3 * 60 * 1000;
+const REFRESH_MS = 60 * 1000;
 
 export interface Trending { adds: SleeperTrendingPlayer[]; drops: SleeperTrendingPlayer[]; hours: number }
 export type ProjSource = "sleeper" | "goldenboy" | "blend";
@@ -77,6 +77,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const mounted = useRef(false);
+  const lastRefresh = useRef(0);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(LS_USER) ?? "";
@@ -155,10 +156,27 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!username) return; // null = not checked yet, "" = onboarding
     void loadPortfolio(username);
+    lastRefresh.current = Date.now();
     const t = setInterval(() => {
-      if (document.visibilityState === "visible") void loadPortfolio(username);
+      if (document.visibilityState === "visible") {
+        lastRefresh.current = Date.now();
+        void loadPortfolio(username);
+      }
     }, REFRESH_MS);
-    return () => clearInterval(t);
+    // Refresh the moment the tab regains focus — covers "made a change in the
+    // Sleeper app and switched back" without waiting for the next interval tick.
+    // The 15s guard avoids a redundant fetch right after a scheduled refresh.
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRefresh.current > 15_000) {
+        lastRefresh.current = Date.now();
+        void loadPortfolio(username);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [username, loadPortfolio]);
 
   const refresh = useCallback(async () => {
