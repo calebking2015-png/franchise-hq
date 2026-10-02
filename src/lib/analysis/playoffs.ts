@@ -52,9 +52,6 @@ export interface PlayoffPicture {
   /** Average opponent win% for remaining weeks vs. weeks already played. */
   sosRemaining: number | null;
   sosFaced: number | null;
-  /** Rough projected final record from per-game PF/PA differentials. */
-  projWins: number | null;
-  projLosses: number | null;
   tradeDeadlineWeek: number | null;
   deadlineWeeksLeft: number | null;
   contender: boolean | null;
@@ -112,8 +109,6 @@ export function buildPlayoffPicture(
       eliminated: false,
       sosRemaining: null,
       sosFaced: null,
-      projWins: null,
-      projLosses: null,
       tradeDeadlineWeek: b.format.tradeDeadline,
       deadlineWeeksLeft: b.format.tradeDeadline != null ? b.format.tradeDeadline - nflWeek : null,
       contender: null,
@@ -158,30 +153,8 @@ export function buildPlayoffPicture(
     sosFaced = avg(faced);
   }
 
-  // Rough projected final record: per-week win probability from PF/PA differentials.
-  let projWins: number | null = null;
-  let projLosses: number | null = null;
-  if (schedule && b.myRosterId != null && played > 0) {
-    const myPFg = me.pointsFor / played;
-    const myPAg = me.pointsAgainst / played;
-    let exp = me.record.wins;
-    let n = 0;
-    for (let w = Math.max(1, nflWeek); w <= regSeasonEnd; w++) {
-      const opp = byRoster.get(oppInWeek(schedule, w, b.myRosterId) ?? -1);
-      if (!opp) continue;
-      const og = opp.record.wins + opp.record.losses + opp.record.ties;
-      if (og <= 0) continue;
-      const myExp = (myPFg + opp.pointsAgainst / og) / 2;
-      const oppExp = (opp.pointsFor / og + myPAg) / 2;
-      const diff = myExp - oppExp;
-      exp += 1 / (1 + Math.pow(10, -diff / 20));
-      n++;
-    }
-    if (n > 0) {
-      projWins = Math.round(exp * 10) / 10;
-      projLosses = Math.round((me.record.losses + (n - (exp - me.record.wins))) * 10) / 10;
-    }
-  }
+  // (Heuristic projected finish removed — the page now uses the Monte Carlo
+  // simulator's expected final record instead.)
 
   const tradeDeadlineWeek = b.format.tradeDeadline;
   const deadlineWeeksLeft = tradeDeadlineWeek != null ? tradeDeadlineWeek - nflWeek : null;
@@ -234,8 +207,6 @@ export function buildPlayoffPicture(
     eliminated,
     sosRemaining,
     sosFaced,
-    projWins,
-    projLosses,
     tradeDeadlineWeek,
     deadlineWeeksLeft,
     contender,

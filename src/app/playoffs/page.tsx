@@ -9,10 +9,59 @@ import {
   buildPlayoffPicture, formatGb, pictureSummary,
   type PlayoffPicture, type SeasonSchedule,
 } from "@/lib/analysis/playoffs";
+import {
+  simulateSeason,
+  type SimTeamSeed, type SimWeekMatchup, type TeamSimResult,
+} from "@/lib/analysis/simulator";
 import type { LeagueBundle, Portfolio } from "@/lib/portfolio/types";
 
 function pct(x: number | null) {
   return x == null ? "—" : `.${String(Math.round(x * 1000)).padStart(3, "0")}`;
+}
+
+/** 0.723 -> "72%", 0.032 -> "3.2%", 0 -> "0%". */
+function fmtOdds(x: number | null) {
+  if (x == null) return "—";
+  const p = x * 100;
+  if (p >= 99.95) return "~100%";
+  if (p <= 0.05) return "<0.1%";
+  return p >= 10 ? `${Math.round(p)}%` : `${p.toFixed(1)}%`;
+}
+
+function fmtExpRecord(r: TeamSimResult) {
+  const w = r.expWins.toFixed(1);
+  const l = r.expLosses.toFixed(1);
+  const t = r.expTies >= 0.05 ? `-${r.expTies.toFixed(1)}` : "";
+  return `${w}-${l}${t}`;
+}
+
+/** Run the Monte Carlo sim for one league from its bundle + fetched schedule. */
+function buildLeagueSim(b: LeagueBundle, schedule: SeasonSchedule, nflWeek: number) {
+  const playoffTeams = b.format.playoffTeams ?? 0;
+  if (playoffTeams <= 0) return null;
+  const seeds: SimTeamSeed[] = b.teams.map((t) => ({
+    rosterId: t.rosterId,
+    wins: t.record.wins,
+    losses: t.record.losses,
+    ties: t.record.ties,
+    pointsFor: t.pointsFor,
+    pointsAgainst: t.pointsAgainst,
+  }));
+  const end = (b.format.playoffStart ?? 15) - 1;
+  const weeks: Record<number, SimWeekMatchup[]> = {};
+  for (let w = nflWeek; w <= end; w++) {
+    const seen = new Set<string>();
+    const ms: SimWeekMatchup[] = [];
+    for (const row of schedule[w] ?? []) {
+      if (row.o == null) continue;
+      const key = [row.r, row.o].sort((x, y) => x - y).join("-");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ms.push({ a: row.r, b: row.o });
+    }
+    weeks[w] = ms;
+  }
+  return simulateSeason(seeds, weeks, { playoffTeams, currentWeek: nflWeek, regSeasonEnd: end });
 }
 
 function DeadlineBlock({ p, isDynasty }: { p: PlayoffPicture; isDynasty: boolean }) {
@@ -32,7 +81,46 @@ function DeadlineBlock({ p, isDynasty }: { p: PlayoffPicture; isDynasty: boolean
   );
 }
 
-function LeaguePlayoffCard({ b, picture, scheduleLoaded }: { b: LeagueBundle; picture: PlayoffPicture; scheduleLoaded: boolean }) {
+function OddsHero({ sim, ready }: { sim: TeamSimResult | null; ready: boolean }) {
+  const hasBye = sim?.byePct != null;
+  return (
+    <div className="grid gap-1.5">
+      <div className={cx("grid gap-3", hasBye ? "grid-cols-3" : "grid-cols-2")}>
+        <StatTile
+          label="Playoff odds"
+          value={ready && sim ? fmtOdds(sim.playoffPct) : "—"}
+          sub="10,000 sims"
+          tone={sim ? (sim.playoffPct >= 0.5 ? "ok" : sim.playoffPct < 0.15 ? "urgent" : undefined) : undefined}
+        />
+        <StatTile
+          label="Championship odds"
+          value={ready && sim ? fmtOdds(sim.champPct) : "—"}
+          sub="win the bracket"
+        />
+        {hasBye && (
+          <StatTile
+            label="First-round bye"
+            value={ready && sim ? fmtOdds(sim.byePct) : "—"}
+            sub="top seed payout"
+          />
+        )}
+      </div>
+      {ready && sim ? (
+        <p className="caption">Sim expected finish: <span className="num font-medium">{fmtExpRecord(sim)}</span> — average final record across all sims.</p>
+      ) : (
+        <p className="caption">{ready ? "Schedule didn't load for this league — odds unavailable." : "Simulating…"}</p>
+      )}
+    </div>
+  );
+}
+
+function LeaguePlayoffCard({ b, picture, sim, simReady, scheduleLoaded }: {
+  b: LeagueBundle;
+  picture: PlayoffPicture;
+  sim: TeamSimResult | null;
+  simReady: boolean;
+  scheduleLoaded: boolean;
+}) {
   if (!picture.hasPlayoffs) {
     return (
       <Card title={<div className="flex items-center justify-between gap-2"><span className="h3 truncate">{b.league.name}</span><LeagueKindChip kind={b.format.kind} /></div>}>
@@ -61,6 +149,8 @@ function LeaguePlayoffCard({ b, picture, scheduleLoaded }: { b: LeagueBundle; pi
       }
     >
       <div className="grid gap-4">
+        <OddsHero sim={sim} ready={simReady} />
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatTile label="Seed" value={`#${picture.seed}`} sub={`${b.format.teams} teams · ${picture.playoffTeams} make it`} />
           <StatTile label="Record" value={<span className="num">{recordStr(picture.record)}</span>} sub={`${fmtPts(picture.pointsFor)} PF · ${fmtPts(picture.pointsAgainst)} PA`} />
@@ -89,9 +179,6 @@ function LeaguePlayoffCard({ b, picture, scheduleLoaded }: { b: LeagueBundle; pi
                   <span>Opp win% faced <span className="num font-medium">{pct(picture.sosFaced)}</span></span>
                 </div>
                 {sosNote && <p className="caption">{sosNote}</p>}
-                {picture.projWins != null && (
-                  <p className="caption">Rough projected finish: <span className="num font-medium">{picture.projWins.toFixed(1)}-{picture.projLosses!.toFixed(1)}</span> from PF/PA differentials — direction, not destiny.</p>
-                )}
               </>
             )}
           </div>
@@ -175,6 +262,19 @@ function PlayoffsView({ portfolio }: { portfolio: Portfolio }) {
     () => portfolio.leagues.map((b) => buildPlayoffPicture(b, schedules[b.league.league_id] ?? null, portfolio.week)),
     [portfolio, schedules],
   );
+
+  // Monte Carlo sims run client-side on the already-fetched schedules — no extra requests.
+  const sims = useMemo(() => {
+    const out: Record<string, Record<number, TeamSimResult>> = {};
+    for (const b of playoffLeagues) {
+      const sched = schedules[b.league.league_id];
+      if (!sched) continue;
+      const res = buildLeagueSim(b, sched, portfolio.week);
+      if (res) out[b.league.league_id] = res;
+    }
+    return out;
+  }, [playoffLeagues, schedules, portfolio.week]);
+
   const withPlayoffs = pictures.filter((p) => p.hasPlayoffs);
   if (withPlayoffs.length === 0 && !schedLoading) {
     return (
@@ -188,17 +288,27 @@ function PlayoffsView({ portfolio }: { portfolio: Portfolio }) {
     <>
       <PageHeader
         title="Playoff Push"
-        sub={`Week ${portfolio.week} · clinch math, remaining schedule, deadline countdown. Projections are rough — direction, not destiny.`}
+        sub={`Week ${portfolio.week} · 10,000-sim playoff odds, clinch math, remaining schedule, deadline countdown.`}
       />
       {schedLoading && (
         <div className="grid gap-3 mb-4"><Skeleton h={180} /><Skeleton h={140} /></div>
       )}
       <div className="grid gap-4">
-        {portfolio.leagues.map((b, i) => (
-          <LeaguePlayoffCard key={b.league.league_id} b={b} picture={pictures[i]} scheduleLoaded={!schedLoading || !!schedules[b.league.league_id]} />
-        ))}
+        {portfolio.leagues.map((b, i) => {
+          const leagueSims = sims[b.league.league_id];
+          return (
+            <LeaguePlayoffCard
+              key={b.league.league_id}
+              b={b}
+              picture={pictures[i]}
+              sim={b.myRosterId != null && leagueSims ? leagueSims[b.myRosterId] ?? null : null}
+              simReady={!schedLoading && !!leagueSims}
+              scheduleLoaded={!schedLoading || !!schedules[b.league.league_id]}
+            />
+          );
+        })}
       </div>
-      <p className="caption mt-4">Magic number = (regular-season games + 1) − your wins − (losses of the first team out). Remaining schedule strength uses each opponent&apos;s current win%. Tiebreakers beyond record-then-points-for are not modeled.</p>
+      <p className="caption mt-4">Odds come from a 10,000-season Monte Carlo sim: team strength from scoring averages, ~22&nbsp;pt weekly margin spread, current week onward simulated (games already played this week aren&apos;t locked in). Standings tiebreak is record, then points-for. Magic number = (regular-season games + 1) − your wins − (losses of the first team out).</p>
     </>
   );
 }
