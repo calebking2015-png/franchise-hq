@@ -157,7 +157,7 @@ function LeaguePlayoffCard({ b, picture, sim, simReady, scheduleLoaded }: {
           <StatTile
             label="Final spot"
             value={picture.clinched ? "Clinched" : picture.eliminated ? "Out (rough)" : formatGb(picture.gamesBackFinal)}
-            sub={picture.firstOut ? `vs ${picture.firstOut.teamName}` : undefined}
+            sub={picture.finalSpot ? `vs ${picture.finalSpot.teamName}` : undefined}
             tone={picture.clinched ? "ok" : picture.eliminated ? "urgent" : undefined}
           />
           <StatTile
