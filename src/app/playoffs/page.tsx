@@ -114,10 +114,53 @@ function OddsHero({ sim, ready }: { sim: TeamSimResult | null; ready: boolean })
   );
 }
 
-function LeaguePlayoffCard({ b, picture, sim, simReady, scheduleLoaded }: {
+function TitleOddsTable({ b, sims, ready }: {
+  b: LeagueBundle;
+  sims: Record<number, TeamSimResult> | undefined;
+  ready: boolean;
+}) {
+  if (!ready) return <p className="caption">Simulating…</p>;
+  const rows = b.teams
+    .map((team) => ({ team, sim: sims?.[team.rosterId] ?? null }))
+    .filter((r): r is { team: (typeof b.teams)[number]; sim: TeamSimResult } => r.sim != null)
+    .sort((a, z) => z.sim.champPct - a.sim.champPct);
+  if (rows.length === 0) return <p className="caption">Schedule didn&apos;t load for this league — odds unavailable.</p>;
+  return (
+    <div className="grid gap-1.5">
+      <div className="h3">Title odds</div>
+      <ul className="grid gap-1">
+        {rows.map(({ team, sim }, i) => (
+          <li
+            key={team.rosterId}
+            className={cx(
+              "flex items-baseline justify-between gap-2 text-[13.5px]",
+              team.rosterId === b.myRosterId && "font-medium",
+            )}
+          >
+            <span className="truncate">
+              <span className="caption num">#{team.standing}</span> {team.teamName}{" "}
+              <span className="caption num">{recordStr(team.record)}</span>
+              {i === 0 && <span className="text-gold"> · Predicted champ</span>}
+              {team.rosterId === b.myRosterId && <span className="caption"> · you</span>}
+            </span>
+            <span className="shrink-0 num">
+              <span className="caption">Playoff </span>
+              {fmtOdds(sim.playoffPct)}
+              <span className="caption"> · Title </span>
+              {fmtOdds(sim.champPct)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function LeaguePlayoffCard({ b, picture, sim, allSims, simReady, scheduleLoaded }: {
   b: LeagueBundle;
   picture: PlayoffPicture;
   sim: TeamSimResult | null;
+  allSims: Record<number, TeamSimResult> | undefined;
   simReady: boolean;
   scheduleLoaded: boolean;
 }) {
@@ -166,6 +209,8 @@ function LeaguePlayoffCard({ b, picture, sim, simReady, scheduleLoaded }: {
             sub={pictureSummary(picture)}
           />
         </div>
+
+        <TitleOddsTable b={b} sims={allSims} ready={simReady} />
 
         <div className="grid md:grid-cols-2 gap-4">
           <div className="grid gap-1.5">
@@ -302,6 +347,7 @@ function PlayoffsView({ portfolio }: { portfolio: Portfolio }) {
               b={b}
               picture={pictures[i]}
               sim={b.myRosterId != null && leagueSims ? leagueSims[b.myRosterId] ?? null : null}
+              allSims={leagueSims}
               simReady={!schedLoading && !!leagueSims}
               scheduleLoaded={!schedLoading || !!schedules[b.league.league_id]}
             />
