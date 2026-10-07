@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Ready } from "@/components/fantasy";
-import { Card, EmptyState, PageHeader, PlayerCell, PlayerLink, PositionBadge, Segmented, Skeleton, StatTile, cx, fmtPts } from "@/components/ui";
+import { Card, EmptyState, PageHeader, PlayerCell, PlayerLink, PositionBadge, Segmented, Skeleton, StatTile, TeamLogo, cx, fmtPts } from "@/components/ui";
 import { positionalDepth } from "@/lib/analysis/exposure";
 import { buildTrends, type Trend, type Verdict } from "@/lib/analysis/trends";
 import { fcKey, evalTrade, leagueTeamValues, type ValueMap } from "@/lib/values";
@@ -195,6 +195,103 @@ function TeamValueView({ portfolio, players, values }: { portfolio: NonNullable<
 
 type TradeCounts = Record<string, { count: number; lastWeek: number; lastSeason?: string }>;
 
+interface TradePickMove { season: string; round: number; fromRosterId: number; origRosterId: number }
+interface TradeDetailTeam {
+  rosterId: number; teamName: string; isMe: boolean;
+  receivedPlayers: string[]; gavePlayers: string[];
+  receivedPicks: TradePickMove[]; gavePicks: TradePickMove[];
+}
+interface TradeDetail { season: string; week: number; teams: TradeDetailTeam[] }
+
+function PickChip({ pick, teamNameOf }: { pick: TradePickMove; teamNameOf: (rid: number) => string }) {
+  const via = pick.origRosterId !== pick.fromRosterId ? ` via ${teamNameOf(pick.origRosterId)}` : "";
+  return <span className="chip chip-outline text-[11px]">{pick.season} R{pick.round}{via}</span>;
+}
+
+function TradeDetailsModal({ playerId, leagueId, scope, week, myRosterId, players, onClose }: {
+  playerId: string; leagueId: string; scope: "season" | "alltime"; week: number;
+  myRosterId: number | null; players: PlayerMap; onClose: () => void;
+}) {
+  const [trades, setTrades] = useState<TradeDetail[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const player = players[playerId];
+  useEffect(() => {
+    setTrades(null);
+    setErr(null);
+    const qs = new URLSearchParams({ id: leagueId, playerId, scope, throughWeek: String(week) });
+    if (myRosterId != null) qs.set("myRosterId", String(myRosterId));
+    fetch(`/api/sleeper/trade-details?${qs}`)
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as { trades: TradeDetail[] }; })
+      .then((j) => setTrades(j.trades))
+      .catch((e) => setErr((e as Error).message));
+  }, [leagueId, playerId, scope, week, myRosterId]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Trade history: ${player?.name ?? playerId}`}>
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative card w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line shrink-0">
+          <div className="min-w-0">
+            <div className="h2 truncate">Trade history: {player?.name ?? playerId}</div>
+            <div className="caption">{scope === "alltime" ? "Every completed trade, all time" : `Completed trades, weeks 1–${week}`}</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="chip chip-outline shrink-0 hover:border-gold">✕</button>
+        </div>
+        <div className="overflow-y-auto p-4 grid gap-3">
+          {err ? (
+            <EmptyState title="Couldn't load trades" detail={err} />
+          ) : trades === null ? (
+            <div className="grid gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} h={64} />)}</div>
+          ) : trades.length === 0 ? (
+            <EmptyState title="No trades found" detail="No completed trades for this player in this range." />
+          ) : (
+            trades.map((t, i) => {
+              const teamNameOf = (rid: number) => t.teams.find((x) => x.rosterId === rid)?.teamName ?? `Team ${rid}`;
+              return (
+                <div key={i} className="rounded-lg card-2 overflow-hidden">
+                  <div className="px-3 py-2 bg-surface-2 font-medium text-[13px]">{t.season ? `${t.season} · ` : ""}Week {t.week}</div>
+                  <div className="divide-y divide-line">
+                    {t.teams.map((tm) => (
+                      <div key={tm.rosterId} className={cx("px-3 py-2.5", tm.isMe && "bg-gold/5")}>
+                        <div className={cx("font-medium text-[13.5px]", tm.isMe && "text-gold")}>{tm.teamName}{tm.isMe && " (you)"}</div>
+                        {(tm.receivedPlayers.length > 0 || tm.receivedPicks.length > 0) && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                            <span className="caption w-16 shrink-0">Received</span>
+                            {tm.receivedPlayers.map((pid) => (
+                              <span key={pid} className={cx(pid === playerId && "font-semibold text-gold")}><PlayerLink player={players[pid]} id={pid} /></span>
+                            ))}
+                            {tm.receivedPicks.map((pk, k) => <PickChip key={k} pick={pk} teamNameOf={teamNameOf} />)}
+                          </div>
+                        )}
+                        {(tm.gavePlayers.length > 0 || tm.gavePicks.length > 0) && (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
+                            <span className="caption w-16 shrink-0">Gave</span>
+                            {tm.gavePlayers.map((pid) => (
+                              <span key={pid} className={cx(pid === playerId && "font-semibold text-gold")}><PlayerLink player={players[pid]} id={pid} /></span>
+                            ))}
+                            {tm.gavePicks.map((pk, k) => <PickChip key={k} pick={pk} teamNameOf={teamNameOf} />)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnType<typeof usePortfolio>["portfolio"]>; players: PlayerMap }) {
   const first = portfolio.leagues[0];
   const [leagueId, setLeagueId] = useState(first?.league.league_id ?? "");
@@ -202,6 +299,7 @@ function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnT
   const [counts, setCounts] = useState<TradeCounts | null>(null);
   const [seasons, setSeasons] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const week = portfolio.week;
   useEffect(() => {
     if (!leagueId) return;
@@ -222,6 +320,7 @@ function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnT
   const isDynasty = b?.format.isDynasty ?? false;
   const seasonRange = seasons.length <= 1 ? seasons[0] ?? "" : `${seasons[0]}–${seasons[seasons.length - 1]}`;
   return (
+    <>
     <Card pad={false} title="Most traded" actions={<div className="flex items-center gap-2">{isDynasty && <Segmented value={scope} onChange={setScope} options={[{ value: "season", label: "This season" }, { value: "alltime", label: "All time" }]} />}<select value={leagueId} onChange={(e) => { const id = e.target.value; setLeagueId(id); setScope(portfolio.leagues.find((x) => x.league.league_id === id)?.format.isDynasty ? "alltime" : "season"); }} className="field text-[13px] py-1">{portfolio.leagues.map((x) => <option key={x.league.league_id} value={x.league.league_id}>{x.league.name}</option>)}</select></div>}>
       {err ? (
         <div className="p-4"><EmptyState title="Couldn't load trades" detail={err} /></div>
@@ -234,7 +333,15 @@ function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnT
           {rows.map(([id, v], i) => (
             <div key={id} className="px-4 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0"><span className="num text-muted w-5">{i + 1}</span><PlayerCell player={players[id]} id={id} showHeadshot={false} /></div>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="num text-muted w-5">{i + 1}</span>
+                  <button type="button" onClick={() => setDetailId(id)} title={`Trade history: ${players[id]?.name ?? id}`} className="min-w-0 text-left group">
+                    <span className="font-medium block truncate group-hover:text-gold group-hover:underline underline-offset-2">{players[id]?.name ?? id}</span>
+                    <span className="flex items-center gap-1.5 text-[12px] text-muted mt-0.5">
+                      {players[id] && <><PositionBadge pos={players[id].pos} /><TeamLogo team={players[id].team} size={14} /><span>{players[id].team ?? "FA"}</span></>}
+                    </span>
+                  </button>
+                </div>
                 <span className="num font-semibold shrink-0">{v.count}× <span className="caption font-normal">traded</span></span>
               </div>
               <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden mt-2"><div className="h-full rounded-full bg-gold" style={{ width: `${(v.count / max) * 100}%` }} /></div>
@@ -245,6 +352,18 @@ function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnT
       )}
       <p className="caption px-4 py-3">{scope === "alltime" ? <>Completed trades per player in {b.league.name}, all time{seasonRange ? ` (${seasonRange})` : ""}. A player moved twice in one deal counts once.</> : <>Completed trades per player in {b.league.name}, weeks 1–{week}. A player moved twice in one deal counts once.</>}</p>
     </Card>
+    {detailId && (
+      <TradeDetailsModal
+        playerId={detailId}
+        leagueId={leagueId}
+        scope={scope}
+        week={week}
+        myRosterId={b.myRosterId}
+        players={players}
+        onClose={() => setDetailId(null)}
+      />
+    )}
+    </>
   );
 }
 
