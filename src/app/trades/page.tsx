@@ -245,7 +245,7 @@ function TradeDetailsModal({ playerId, leagueId, scope, week, myRosterId, player
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="chip chip-outline shrink-0 hover:border-gold">✕</button>
         </div>
-        <div className="overflow-y-auto min-h-0 p-4 grid gap-3">
+        <div className="overflow-y-auto min-h-0 p-4 flex flex-col gap-3">
           {err ? (
             <EmptyState title="Couldn't load trades" detail={err} />
           ) : trades === null ? (
@@ -256,7 +256,7 @@ function TradeDetailsModal({ playerId, leagueId, scope, week, myRosterId, player
             trades.map((t, i) => {
               const teamNameOf = (rid: number) => t.teams.find((x) => x.rosterId === rid)?.teamName ?? `Team ${rid}`;
               return (
-                <div key={i} className="rounded-lg card-2 overflow-hidden">
+                <div key={i} className="rounded-lg card-2 overflow-hidden shrink-0">
                   <div className="px-3 py-2 bg-surface-2 font-medium text-[13px]">{t.season ? `${t.season} · ` : ""}Week {t.week}</div>
                   <div className="divide-y divide-line">
                     {t.teams.map((tm) => (
