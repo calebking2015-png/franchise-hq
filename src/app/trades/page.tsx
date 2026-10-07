@@ -193,36 +193,42 @@ function TeamValueView({ portfolio, players, values }: { portfolio: NonNullable<
   );
 }
 
-type TradeCounts = Record<string, { count: number; lastWeek: number }>;
+type TradeCounts = Record<string, { count: number; lastWeek: number; lastSeason?: string }>;
 
 function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnType<typeof usePortfolio>["portfolio"]>; players: PlayerMap }) {
-  const [leagueId, setLeagueId] = useState(portfolio.leagues[0]?.league.league_id ?? "");
+  const first = portfolio.leagues[0];
+  const [leagueId, setLeagueId] = useState(first?.league.league_id ?? "");
+  const [scope, setScope] = useState<"season" | "alltime">(first?.format.isDynasty ? "alltime" : "season");
   const [counts, setCounts] = useState<TradeCounts | null>(null);
+  const [seasons, setSeasons] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const week = portfolio.week;
   useEffect(() => {
     if (!leagueId) return;
     setCounts(null);
+    setSeasons([]);
     setErr(null);
-    fetch(`/api/sleeper/trade-counts?id=${leagueId}&throughWeek=${week}`)
-      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as { counts: TradeCounts }; })
-      .then((j) => setCounts(j.counts))
+    fetch(`/api/sleeper/trade-counts?id=${leagueId}&throughWeek=${week}&scope=${scope}`)
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as { counts: TradeCounts; seasons: string[] }; })
+      .then((j) => { setCounts(j.counts); setSeasons(j.seasons ?? []); })
       .catch((e) => setErr((e as Error).message));
-  }, [leagueId, week]);
+  }, [leagueId, week, scope]);
   const rows = Object.entries(counts ?? {})
     .filter(([id]) => players[id])
-    .sort((a, b) => b[1].count - a[1].count || b[1].lastWeek - a[1].lastWeek)
+    .sort((a, b) => b[1].count - a[1].count || (b[1].lastSeason ?? "").localeCompare(a[1].lastSeason ?? "") || b[1].lastWeek - a[1].lastWeek)
     .slice(0, 25);
   const max = Math.max(...rows.map(([, v]) => v.count), 1);
   const b = portfolio.leagues.find((x) => x.league.league_id === leagueId) ?? portfolio.leagues[0];
+  const isDynasty = b?.format.isDynasty ?? false;
+  const seasonRange = seasons.length <= 1 ? seasons[0] ?? "" : `${seasons[0]}–${seasons[seasons.length - 1]}`;
   return (
-    <Card pad={false} title="Most traded" actions={<select value={leagueId} onChange={(e) => setLeagueId(e.target.value)} className="field text-[13px] py-1">{portfolio.leagues.map((x) => <option key={x.league.league_id} value={x.league.league_id}>{x.league.name}</option>)}</select>}>
+    <Card pad={false} title="Most traded" actions={<div className="flex items-center gap-2">{isDynasty && <Segmented value={scope} onChange={setScope} options={[{ value: "season", label: "This season" }, { value: "alltime", label: "All time" }]} />}<select value={leagueId} onChange={(e) => { const id = e.target.value; setLeagueId(id); setScope(portfolio.leagues.find((x) => x.league.league_id === id)?.format.isDynasty ? "alltime" : "season"); }} className="field text-[13px] py-1">{portfolio.leagues.map((x) => <option key={x.league.league_id} value={x.league.league_id}>{x.league.name}</option>)}</select></div>}>
       {err ? (
         <div className="p-4"><EmptyState title="Couldn't load trades" detail={err} /></div>
       ) : counts === null ? (
         <div className="p-4 grid gap-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={44} />)}</div>
       ) : rows.length === 0 ? (
-        <div className="p-4"><EmptyState title="No trades yet this season" detail={`${b.league.name} hasn't had a completed trade through week ${week}.`} /></div>
+        <div className="p-4"><EmptyState title={scope === "alltime" ? "No trades in league history" : "No trades yet this season"} detail={scope === "alltime" ? `${b.league.name} has no completed trades on record across ${seasonRange || "its history"}.` : `${b.league.name} hasn't had a completed trade through week ${week}.`} /></div>
       ) : (
         <div className="divide-y divide-line">
           {rows.map(([id, v], i) => (
@@ -232,12 +238,12 @@ function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnT
                 <span className="num font-semibold shrink-0">{v.count}× <span className="caption font-normal">traded</span></span>
               </div>
               <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden mt-2"><div className="h-full rounded-full bg-gold" style={{ width: `${(v.count / max) * 100}%` }} /></div>
-              <div className="caption mt-1.5">Last traded week {v.lastWeek}</div>
+              <div className="caption mt-1.5">{scope === "alltime" && v.lastSeason ? `Last traded: ${v.lastSeason} Wk ${v.lastWeek}` : `Last traded week ${v.lastWeek}`}</div>
             </div>
           ))}
         </div>
       )}
-      <p className="caption px-4 py-3">Completed trades per player in {b.league.name}, weeks 1–{week}. A player moved twice in one deal counts once.</p>
+      <p className="caption px-4 py-3">{scope === "alltime" ? <>Completed trades per player in {b.league.name}, all time{seasonRange ? ` (${seasonRange})` : ""}. A player moved twice in one deal counts once.</> : <>Completed trades per player in {b.league.name}, weeks 1–{week}. A player moved twice in one deal counts once.</>}</p>
     </Card>
   );
 }
