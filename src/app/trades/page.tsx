@@ -234,9 +234,10 @@ function TradeDetailsModal({ playerId, leagueId, scope, week, myRosterId, player
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Trade history: ${player?.name ?? playerId}`}>
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative card w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label={`Trade history: ${player?.name ?? playerId}`}>
+      <div className="fixed inset-0 bg-black/60" onClick={onClose} aria-hidden="true" />
+      <div className="relative min-h-full flex items-center justify-center p-3 sm:p-6">
+      <div className="relative card w-full max-w-3xl max-h-[92dvh] flex flex-col">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line shrink-0">
           <div className="min-w-0">
             <div className="h2 truncate">Trade history: {player?.name ?? playerId}</div>
@@ -244,7 +245,7 @@ function TradeDetailsModal({ playerId, leagueId, scope, week, myRosterId, player
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="chip chip-outline shrink-0 hover:border-gold">✕</button>
         </div>
-        <div className="overflow-y-auto p-4 grid gap-3">
+        <div className="overflow-y-auto min-h-0 p-4 grid gap-3">
           {err ? (
             <EmptyState title="Couldn't load trades" detail={err} />
           ) : trades === null ? (
@@ -287,6 +288,7 @@ function TradeDetailsModal({ playerId, leagueId, scope, week, myRosterId, player
             })
           )}
         </div>
+      </div>
       </div>
     </div>
   );
