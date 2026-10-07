@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePortfolio } from "@/components/shell/PortfolioProvider";
 import { Ready } from "@/components/fantasy";
-import { Card, EmptyState, PageHeader, PlayerCell, PlayerLink, PositionBadge, Segmented, StatTile, cx, fmtPts } from "@/components/ui";
+import { Card, EmptyState, PageHeader, PlayerCell, PlayerLink, PositionBadge, Segmented, Skeleton, StatTile, cx, fmtPts } from "@/components/ui";
 import { positionalDepth } from "@/lib/analysis/exposure";
 import { buildTrends, type Trend, type Verdict } from "@/lib/analysis/trends";
 import { fcKey, evalTrade, leagueTeamValues, type ValueMap } from "@/lib/values";
@@ -193,9 +193,58 @@ function TeamValueView({ portfolio, players, values }: { portfolio: NonNullable<
   );
 }
 
+type TradeCounts = Record<string, { count: number; lastWeek: number }>;
+
+function MostTradedView({ portfolio, players }: { portfolio: NonNullable<ReturnType<typeof usePortfolio>["portfolio"]>; players: PlayerMap }) {
+  const [leagueId, setLeagueId] = useState(portfolio.leagues[0]?.league.league_id ?? "");
+  const [counts, setCounts] = useState<TradeCounts | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const week = portfolio.week;
+  useEffect(() => {
+    if (!leagueId) return;
+    setCounts(null);
+    setErr(null);
+    fetch(`/api/sleeper/trade-counts?id=${leagueId}&throughWeek=${week}`)
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as { counts: TradeCounts }; })
+      .then((j) => setCounts(j.counts))
+      .catch((e) => setErr((e as Error).message));
+  }, [leagueId, week]);
+  const rows = Object.entries(counts ?? {})
+    .filter(([id]) => players[id])
+    .sort((a, b) => b[1].count - a[1].count || b[1].lastWeek - a[1].lastWeek)
+    .slice(0, 25);
+  const max = Math.max(...rows.map(([, v]) => v.count), 1);
+  const b = portfolio.leagues.find((x) => x.league.league_id === leagueId) ?? portfolio.leagues[0];
+  return (
+    <Card pad={false} title="Most traded" actions={<select value={leagueId} onChange={(e) => setLeagueId(e.target.value)} className="field text-[13px] py-1">{portfolio.leagues.map((x) => <option key={x.league.league_id} value={x.league.league_id}>{x.league.name}</option>)}</select>}>
+      {err ? (
+        <div className="p-4"><EmptyState title="Couldn't load trades" detail={err} /></div>
+      ) : counts === null ? (
+        <div className="p-4 grid gap-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={44} />)}</div>
+      ) : rows.length === 0 ? (
+        <div className="p-4"><EmptyState title="No trades yet this season" detail={`${b.league.name} hasn't had a completed trade through week ${week}.`} /></div>
+      ) : (
+        <div className="divide-y divide-line">
+          {rows.map(([id, v], i) => (
+            <div key={id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0"><span className="num text-muted w-5">{i + 1}</span><PlayerCell player={players[id]} id={id} showHeadshot={false} /></div>
+                <span className="num font-semibold shrink-0">{v.count}× <span className="caption font-normal">traded</span></span>
+              </div>
+              <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden mt-2"><div className="h-full rounded-full bg-gold" style={{ width: `${(v.count / max) * 100}%` }} /></div>
+              <div className="caption mt-1.5">Last traded week {v.lastWeek}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="caption px-4 py-3">Completed trades per player in {b.league.name}, weeks 1–{week}. A player moved twice in one deal counts once.</p>
+    </Card>
+  );
+}
+
 export default function TradesPage() {
   const { projections, goldenBoyTd, seasonStats, values } = usePortfolio();
-  const [tab, setTab] = useState<Verdict | "depth" | "evaluate" | "value" | "find">("buy-low");
+  const [tab, setTab] = useState<Verdict | "depth" | "evaluate" | "value" | "find" | "most-traded">("buy-low");
   return (
     <Ready>
       {(portfolio, players) => {
@@ -217,9 +266,9 @@ export default function TradesPage() {
           <>
             <PageHeader title="Trade targets"
               sub={<>Buy-low / sell-high reads on the players you roster, from actual points vs. projection and how sustainable the scoring is (volume vs. touchdown luck). {noGames ? "No games have been played yet this season — check back after Week 1 kicks off." : lowConf ? <span className="text-warn">Only {throughWeek} week{throughWeek === 1 ? "" : "s"} in — treat these as early signals, not verdicts. They firm up around Week 4.</span> : "Confidence rises with sample size; the dots show how many games back each call."}</>}
-              actions={<Segmented value={tab} onChange={setTab} options={[{ value: "buy-low", label: "Buy low", count: buy.length }, { value: "sell-high", label: "Sell high", count: sell.length }, { value: "hold", label: "Hold", count: hold.length }, { value: "find", label: "Find trades" }, { value: "evaluate", label: "Evaluate" }, { value: "value", label: "Team value" }, { value: "depth", label: "Depth" }]} />} />
+              actions={<Segmented value={tab} onChange={setTab} options={[{ value: "buy-low", label: "Buy low", count: buy.length }, { value: "sell-high", label: "Sell high", count: sell.length }, { value: "hold", label: "Hold", count: hold.length }, { value: "find", label: "Find trades" }, { value: "evaluate", label: "Evaluate" }, { value: "value", label: "Team value" }, { value: "most-traded", label: "Most traded" }, { value: "depth", label: "Depth" }]} />} />
 
-            {!noGames && tab !== "depth" && (
+            {!noGames && tab !== "depth" && tab !== "most-traded" && (
               <div className="grid grid-cols-3 gap-3 mb-5">
                 <StatTile label="Buy-low" value={buy.length} sub="underproducing on real volume" tone="ok" />
                 <StatTile label="Sell-high" value={sell.length} sub="hot on unsustainable scoring" tone="urgent" />
@@ -233,6 +282,8 @@ export default function TradesPage() {
               <TeamValueView portfolio={portfolio} players={players} values={values} />
             ) : tab === "evaluate" ? (
               <TradeEvaluator portfolio={portfolio} players={players} values={values} />
+            ) : tab === "most-traded" ? (
+              <MostTradedView portfolio={portfolio} players={players} />
             ) : tab === "depth" ? (
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {portfolio.leagues.map((b) => (
@@ -256,7 +307,11 @@ export default function TradesPage() {
               <Card pad={false}><div className="divide-y divide-line">{shown.map((t) => { const b = portfolio.leagues.find((x) => x.league.league_id === t.mine[0]?.leagueId); const v = b ? values[fcKey(b.format)]?.[t.playerId]?.value : undefined; return <TrendRow key={t.playerId} t={t} players={players} value={v} />; })}</div></Card>
             )}
 
-            <p className="caption mt-4">Reads cover QB/RB/WR/TE you roster. &quot;vs proj&quot; is your points minus projection per game; buy-low = under projection but the targets/carries are still there; sell-high = over projection on touchdown luck or thin volume. Signals to investigate, not instructions — and no fair-value math yet (that needs a trade-value source, a later add). {goldenBoyTd && Object.keys(goldenBoyTd).length > 0 ? "TD outlook from Fantasy Golden Boy." : ""}</p>
+            {tab === "most-traded" ? (
+              <p className="caption mt-4">Trade counts come from Sleeper&apos;s completed transactions for the selected league. A hot-potato player isn&apos;t automatically a buy or a sell — open the Evaluate tab before chasing one.</p>
+            ) : (
+              <p className="caption mt-4">Reads cover QB/RB/WR/TE you roster. &quot;vs proj&quot; is your points minus projection per game; buy-low = under projection but the targets/carries are still there; sell-high = over projection on touchdown luck or thin volume. Signals to investigate, not instructions — and no fair-value math yet (that needs a trade-value source, a later add). {goldenBoyTd && Object.keys(goldenBoyTd).length > 0 ? "TD outlook from Fantasy Golden Boy." : ""}</p>
+            )}
           </>
         );
       }}
